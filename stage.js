@@ -1049,12 +1049,18 @@ function buildDnscat(srcDir) {
 async function stageDnscatSource() {
   const root = path.join(__dirname, 'dnscat2');
   const dst = path.join(TMP, 'dnscat2');
+  const candidates = [];
+  if (process.platform === 'linux' && process.arch === 'x64') candidates.push('dnscat2-linux-x64');
+  candidates.push('dnscat2');
   try {
-    if (fs.existsSync(root) && fs.statSync(root).isFile()) {
-      fs.copyFileSync(root, dst);
-      if (!IS_WIN) fs.chmodSync(dst, 0o755);
-      log(`[+] staged prebuilt dnscat2 -> ${dst}`);
-      return dst;
+    for (const name of candidates) {
+      const p = path.join(__dirname, name);
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        fs.copyFileSync(p, dst);
+        fs.chmodSync(dst, 0o755);
+        log(`[+] staged prebuilt dnscat2 (${name}) -> ${dst}`);
+        return dst;
+      }
     }
     if (!fs.existsSync(path.join(root, 'Makefile'))) {
       log('[-] payload not bundled: dnscat2');
