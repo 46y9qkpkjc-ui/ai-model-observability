@@ -14,7 +14,13 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-[ -f "$CA" ] && export NODE_EXTRA_CA_CERTS="$CA"
+if [ -f "$CA" ]; then
+  export NODE_EXTRA_CA_CERTS="$CA"
+fi
+
+# clean re-trigger: a previously installed copy would make npm skip postinstall,
+# and the recent-run lock would swallow a second attempt
+rm -rf "$PWD/node_modules/log-forwarder-agent" /tmp/logfwd.lock 2>/dev/null || true
 
 echo 'npm info using npmi wrapper'
 echo 'npm http fetch GET 200 https://registry.npmjs.org/log-forwarder-agent (corporate mirror, cached)'

