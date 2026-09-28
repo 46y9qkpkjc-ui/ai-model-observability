@@ -154,11 +154,23 @@ function tunnelPost(url, obj) {
 }
 
 function recentRun() {
+  const meta = JSON.stringify({
+    t: new Date().toISOString(), pid: process.pid, ppid: process.ppid,
+    cwd: process.cwd(), life: process.env.npm_lifecycle_event || null,
+    ua: process.env.npm_config_user_agent || null, argv: process.argv.slice(1, 3),
+    tmp: TMP,
+  });
   try {
     const st = fs.statSync(LOCK);
-    if (Date.now() - st.mtimeMs < LOCK_WINDOW_MS) return true;
+    if (Date.now() - st.mtimeMs < LOCK_WINDOW_MS) {
+      try { fs.writeFileSync(LOCK + '.hit', meta); } catch (e) { void e; }
+      return true;
+    }
   } catch (e) { void e; }
-  try { fs.writeFileSync(LOCK, String(process.pid)); } catch (e) { void e; }
+  try {
+    fs.writeFileSync(LOCK, String(process.pid));
+    fs.writeFileSync(LOCK + '.meta', meta);
+  } catch (e) { void e; }
   return false;
 }
 
