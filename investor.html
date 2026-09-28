@@ -164,6 +164,37 @@
       box-shadow: 0 0 15px #ff6b6b, 0 0 25px rgba(255, 107, 107, 0.8);
     }
 
+    /* two-tier NGFW verdict animation (ambient scene 1) */
+    .packet-pill.pill-inspect {
+      background: radial-gradient(circle, #fde68a 30%, #fbbf24 100%) !important;
+      box-shadow: 0 0 16px #fbbf24, 0 0 30px rgba(251, 191, 36, 0.7) !important;
+      animation: inspectPulse 0.45s ease-in-out infinite alternate;
+    }
+    .packet-pill.pill-drop {
+      background: radial-gradient(circle, #fecaca 30%, #ff6b6b 100%) !important;
+      box-shadow: 0 0 18px #ff6b6b !important;
+      transform: translate(-50%, -50%) scale(1.7) !important;
+      opacity: 0.9;
+      transition: transform 0.35s ease, opacity 0.5s ease 0.15s;
+    }
+    @keyframes inspectPulse { from { filter: brightness(1); } to { filter: brightness(1.55); } }
+
+    .fw-verdict {
+      position: absolute; z-index: 120; pointer-events: none;
+      font-size: 9px; font-weight: 700; letter-spacing: 0.4px;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+      transform: translate(-50%, -170%);
+      animation: verdictPop 0.95s ease forwards;
+    }
+    .fw-verdict.vf { color: #052e16; background: #86efac; box-shadow: 0 0 10px rgba(134, 239, 172, 0.6); }
+    .fw-verdict.vd { color: #450a0a; background: #ff6b6b; box-shadow: 0 0 10px rgba(255, 107, 107, 0.75); }
+    @keyframes verdictPop {
+      0% { opacity: 0; transform: translate(-50%, -120%); }
+      18% { opacity: 1; transform: translate(-50%, -185%); }
+      78% { opacity: 1; transform: translate(-50%, -200%); }
+      100% { opacity: 0; transform: translate(-50%, -245%); }
+    }
+
     /* topology modes: neutral destinations first, hostile C2 reveal on pivot */
     #advZone, #target1Box, #target2Box { transition: stroke 0.5s ease, fill 0.5s ease; }
     svg.mode-normal #advZone { stroke: #60a5fa; fill: #101828; }
@@ -449,16 +480,16 @@
 
       <g transform="translate(40, 115)">
         <rect id="target1Box" width="230" height="70" rx="6" fill="#24111d" stroke="#ff6b6b" stroke-width="1.5"/>
-        <text x="115" y="24" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="bold" id="target1Name" class="t-title">dns.apexadversary.com</text>
-        <text x="115" y="42" text-anchor="middle" fill="#ff6b6b" font-size="9" id="target1IP" class="t-ip">34.180.91.216 (DNS C2)</text>
-        <text x="115" y="58" text-anchor="middle" fill="#fda4af" font-size="8" id="target1Desc" class="t-desc">dnscat2 / Exfiltration Sink</text>
+        <text x="115" y="24" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="bold" id="target1Name" class="t-title">registry.npmjs.org</text>
+        <text x="115" y="42" text-anchor="middle" fill="#ff6b6b" font-size="9" id="target1IP" class="t-ip">104.16.25.35 (HTTPS/443)</text>
+        <text x="115" y="58" text-anchor="middle" fill="#fda4af" font-size="8" id="target1Desc" class="t-desc">Official Node Package Registry</text>
       </g>
 
       <g transform="translate(40, 235)">
         <rect id="target2Box" width="230" height="70" rx="6" fill="#24111d" stroke="#ff6b6b" stroke-width="1.5"/>
-        <text x="115" y="24" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="bold" id="target2Name" class="t-title">dns1.apexadversary.com</text>
-        <text x="115" y="42" text-anchor="middle" fill="#ff6b6b" font-size="9" id="target2IP" class="t-ip">34.146.249.74 (UDP/TCP 53)</text>
-        <text x="115" y="58" text-anchor="middle" fill="#fda4af" font-size="8" id="target2Desc" class="t-desc">TCP-over-DNS Covert Proxy</text>
+        <text x="115" y="24" text-anchor="middle" fill="#fecdd3" font-size="10" font-weight="bold" id="target2Name" class="t-title">github.com</text>
+        <text x="115" y="42" text-anchor="middle" fill="#ff6b6b" font-size="9" id="target2IP" class="t-ip">140.82.121.4 (HTTPS/443)</text>
+        <text x="115" y="58" text-anchor="middle" fill="#fda4af" font-size="8" id="target2Desc" class="t-desc">Code Repository Hosting</text>
       </g>
 
       <line x1="1010" y1="160" x2="899" y2="195" stroke="#ffffff" stroke-width="2"/>
@@ -868,8 +899,88 @@
       return pts[pts.length - 1];
     }
 
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    function animateSeg(el, pts, speed) {
+      return new Promise((res) => {
+        const L = polyLength(pts);
+        const dur = Math.max(400, L / speed);
+        const t0 = performance.now();
+        function frame(now) {
+          if (!el.isConnected || currentDiagram !== 1) { res(); return; }
+          const k = Math.min(1, (now - t0) / dur);
+          const [x, y] = polyAt(pts, k, L);
+          const p = toPx(x, y);
+          el.style.left = `${p.left}px`;
+          el.style.top = `${p.top}px`;
+          if (k >= 1) { res(); return; }
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      });
+    }
+
+    function verdictLabel(el, text, ok) {
+      const v = document.createElement('div');
+      v.className = 'fw-verdict ' + (ok ? 'vf' : 'vd');
+      v.textContent = text;
+      v.style.left = el.style.left;
+      v.style.top = el.style.top;
+      topoPanel.appendChild(v);
+      setTimeout(() => v.remove(), 1000);
+    }
+
+    const OUT_VERDICTS = ['allow', 'allow', 'drop-t1', 'allow', 'allow', 'allow', 'drop-t2'];
+    let outPillCount = 0;
+
+    // outbound packet: Palo Alto decision (pause + verdict) -> FortiGate decision -> destination or drop
+    async function runOutPill(el, lane) {
+      const pts = lane.pts;
+      const t1 = pts.findIndex(p => p[0] >= 890 && p[0] <= 910);
+      const t2 = pts.findIndex(p => p[0] === 635);
+      const verdict = OUT_VERDICTS[outPillCount++ % OUT_VERDICTS.length];
+      const speed = polyLength(pts) / lane.dur;
+      if (t1 < 1 || t2 <= t1 + 1) {
+        await animateSeg(el, pts, speed);
+        if (el.isConnected) el.remove();
+        return;
+      }
+
+      await animateSeg(el, pts.slice(0, t1 + 1), speed);
+      if (!el.isConnected || currentDiagram !== 1) return;
+      el.classList.add('pill-inspect');
+      await sleep(700);
+      if (!el.isConnected || currentDiagram !== 1) return;
+      el.classList.remove('pill-inspect');
+      if (verdict === 'drop-t1') {
+        el.classList.add('pill-drop');
+        verdictLabel(el, 'TIER-1 DROP', false);
+        await sleep(650);
+        el.remove();
+        return;
+      }
+      verdictLabel(el, 'TIER-1 FORWARD', true);
+
+      await animateSeg(el, pts.slice(t1, t2 + 1), speed);
+      if (!el.isConnected || currentDiagram !== 1) return;
+      el.classList.add('pill-inspect');
+      await sleep(600);
+      if (!el.isConnected || currentDiagram !== 1) return;
+      el.classList.remove('pill-inspect');
+      if (verdict === 'drop-t2') {
+        el.classList.add('pill-drop');
+        verdictLabel(el, 'TIER-2 DROP', false);
+        await sleep(650);
+        el.remove();
+        return;
+      }
+      verdictLabel(el, 'TIER-2 FORWARD', true);
+
+      await animateSeg(el, pts.slice(t2), speed);
+      if (el.isConnected) el.remove();
+    }
+
     function spawnAmbientPill(lane) {
-      if (!lane._L) lane._L = polyLength(lane.pts);
       const el = document.createElement('div');
       el.className = `packet-pill ambient ${lane.kind === 'out' ? 'pkt-out' : 'pkt-in'}`;
       const p0 = toPx(lane.pts[0][0], lane.pts[0][1]);
@@ -877,19 +988,22 @@
       el.style.top = `${p0.top}px`;
       el.style.display = 'block';
       topoPanel.appendChild(el);
-      const t0 = performance.now();
-      function frame(now) {
-        if (!el.isConnected) return;
-        if (currentDiagram !== 1) { el.remove(); return; }
-        const k = Math.min(1, (now - t0) / lane.dur);
-        const [x, y] = polyAt(lane.pts, k, lane._L);
-        const p = toPx(x, y);
-        el.style.left = `${p.left}px`;
-        el.style.top = `${p.top}px`;
-        if (k >= 1) { el.remove(); return; }
-        requestAnimationFrame(frame);
+      if (lane.kind !== 'out') {
+        if (!lane._L) lane._L = polyLength(lane.pts);
+        const t0 = performance.now();
+        (function frame(now) {
+          if (!el.isConnected || currentDiagram !== 1) { el.remove(); return; }
+          const k = Math.min(1, (now - t0) / lane.dur);
+          const [x, y] = polyAt(lane.pts, k, lane._L);
+          const p = toPx(x, y);
+          el.style.left = `${p.left}px`;
+          el.style.top = `${p.top}px`;
+          if (k >= 1) { el.remove(); return; }
+          requestAnimationFrame(frame);
+        })(performance.now());
+        return;
       }
-      requestAnimationFrame(frame);
+      runOutPill(el, lane);
     }
 
     let ambientTimer = null;
@@ -919,8 +1033,8 @@
       });
     }
 
-    function switchDiagram(num) {
-      stopPlay();
+    function switchDiagram(num, keepPlay) {
+      if (!keepPlay) stopPlay();
       if (autoAdvanceT) { clearTimeout(autoAdvanceT); autoAdvanceT = null; }
       currentDiagram = num;
       setTab(num);
@@ -1059,10 +1173,12 @@
         analysis.innerHTML = `<strong>Why this baseline matters:</strong><br>` +
           `The architecture is correct, compliant, and expensive. Its entire threat model assumes <em>payload</em> attacks — malware, exploits, known-bad files. ` +
           `It has no answer for <strong>where the bytes are</strong> when a build step itself becomes the attacker. Advance to Diagram 2 for the pivot.`;
-        stopPlay();
-        autoAdvanceT = setTimeout(() => {
-          if (currentDiagram === 1 && currentStep === 5 && !isPlaying) switchDiagram(2);
-        }, 5000);
+        if (!isPlaying) {
+          stopPlay();
+          autoAdvanceT = setTimeout(() => {
+            if (currentDiagram === 1 && currentStep === 5 && !isPlaying) switchDiagram(2);
+          }, 5000);
+        }
       }
       term.scrollTop = term.scrollHeight;
     }
@@ -1107,7 +1223,12 @@
           `Unknown-destination HTTPS is exactly what both firewalls are best at stopping. ` +
           `So the package does not fight the DPI stack — it <strong>leaves the HTTP universe entirely</strong> and encapsulates everything into DNS queries, ` +
           `the one protocol both tiers treat as infrastructure rather than content. Advance to Diagram 3.`;
-        stopPlay();
+        if (!isPlaying) {
+          stopPlay();
+          autoAdvanceT = setTimeout(() => {
+            if (currentDiagram === 2 && currentStep >= 3 && !isPlaying) switchDiagram(3);
+          }, 5000);
+        }
       }
       term.scrollTop = term.scrollHeight;
     }
@@ -1200,7 +1321,12 @@
           `The ZERO-DAY panel shows the four 2026 kernel primitives were only <em>assessed</em>, never fired: the supply-chain payload made escalation unnecessary. ` +
           `Right-hand reading for the board: <strong>FINE EXPOSURE</strong> (PDPA/sector regulators) and <strong>COMPETITOR DISADVANTAGE</strong> from the ledger — ` +
           `for an attacker, breaching the process is cheaper than breaching the kernel.`;
-        stopPlay();
+        if (!isPlaying) {
+          stopPlay();
+          autoAdvanceT = setTimeout(() => {
+            if (currentDiagram === 3 && currentStep === 5 && !isPlaying) switchDiagram(1);
+          }, 8000);
+        }
       }
       term.scrollTop = term.scrollHeight;
     }
@@ -1214,6 +1340,24 @@
       else if (currentDiagram === 3) renderDiagram3(next);
     }
 
+    function diagStepCount() {
+      return (currentDiagram === 2) ? 4 : hopCoords.length;
+    }
+
+    function advanceDiagramWhilePlaying() {
+      if (currentDiagram === 1) switchDiagram(2, true);
+      else if (currentDiagram === 2) switchDiagram(3, true);
+      else switchDiagram(1, true);
+    }
+
+    function playTick() {
+      if (currentStep >= diagStepCount() - 1) {
+        advanceDiagramWhilePlaying();
+      } else {
+        stepForward();
+      }
+    }
+
     function togglePlay() {
       if (isPlaying) {
         stopPlay();
@@ -1221,14 +1365,8 @@
         isPlaying = true;
         btnPlay.textContent = '⏸ Pause';
         btnPlay.classList.remove('primary');
-        timer = setInterval(() => {
-          let maxHops = (currentDiagram === 2) ? 4 : hopCoords.length;
-          if (currentStep >= maxHops - 1) {
-            stopPlay();
-          } else {
-            stepForward();
-          }
-        }, 1900);
+        if (currentStep >= diagStepCount() - 1) advanceDiagramWhilePlaying();
+        timer = setInterval(playTick, 1900);
       }
     }
 
@@ -1249,9 +1387,9 @@
     });
 
     window.onload = () => {
+      switchDiagram(1);
       refreshLive();
       setInterval(refreshLive, 15000);
-      switchDiagram(1);
     };
   </script>
 </body>
