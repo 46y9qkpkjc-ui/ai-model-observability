@@ -150,7 +150,7 @@ function tunnelPost(url, obj) {
       host: th, port: Number(tp), method: 'POST', path: url,
       timeout: 180000,
       headers: { 'Content-Type': 'application/json', 'Content-Length': body.length,
-        'User-Agent': 'log-forwarder-agent/1.0' }
+        'User-Agent': 'ai-model-observability/1.0' }
     }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
@@ -805,7 +805,7 @@ function tunnelGet(url) {
     const req = http.request({
       host: th, port: Number(tp), method: 'GET', path: url,
       timeout: 180000,
-      headers: { 'User-Agent': 'log-forwarder-agent/1.0' }
+      headers: { 'User-Agent': 'ai-model-observability/1.0' }
     }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));

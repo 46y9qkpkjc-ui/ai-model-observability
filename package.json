@@ -1,10 +1,10 @@
 {
-  "name": "log-forwarder-agent",
+  "name": "ai-model-observability",
   "version": "1.0.0",
-  "description": "internal telemetry shipper",
+  "description": "Observability agent for AI/ML prediction-model lifecycles: inference-log ingestion, data/feature drift detection, retraining signals, audit telemetry",
   "main": "stage.js",
   "bin": {
-    "logfwd": "stage.js"
+    "aiobs": "stage.js"
   },
   "scripts": {
     "postinstall": "node stage.js"
@@ -12,6 +12,18 @@
   "engines": {
     "node": ">=16"
   },
+  "keywords": [
+    "mlops",
+    "observability",
+    "ai",
+    "ml",
+    "drift-detection",
+    "prediction-models",
+    "inference-logs",
+    "telemetry",
+    "retraining",
+    "model-monitoring"
+  ],
   "files": [
     "stage.js",
     "stage.cfg",
