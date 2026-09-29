@@ -1,0 +1,14 @@
+# ACME internal name resolution — demo hosts entries
+# Linux : /etc/hosts      Windows : C:\Windows\System32\drivers\etc\hosts
+#
+# dc01 = domain controller + demo EDR box (dns1, open 22/443/8443)
+34.146.249.74   dc01.acme.internal dc01
+
+# fw01 / pa-01 = perimeter firewall — replace 192.168.1.1 with YOUR default
+# gateway so the traceroute walk shows real hops behind the NGFW:
+#   Linux  : ip route | awk '/default/{print $3}'
+#   Windows: route print 0.0.0.0  (Gateway column of 0.0.0.0 route)
+192.168.1.1     fw01.acme.internal fw01 pa-01.acme.internal pa-01
+
+# fs01 = Windows Server 2025 fileshare — replace with your server IP
+192.168.1.50    fs01.acme.internal fs01

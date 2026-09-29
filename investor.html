@@ -98,6 +98,12 @@
     }
 
     button.nav-btn:hover { background: #2a3550; border-color: var(--brand-light); }
+    a.nav-btn {
+      background: #1a2236; color: var(--text-main); border: 1px solid #2a3550;
+      padding: 6px 14px; border-radius: 6px; font-size: 0.8rem;
+      cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block;
+    }
+    a.nav-btn:hover { background: #2a3550; border-color: var(--brand-light); }
     button.primary { background: var(--brand-gradient); border: none; color: #fff; }
 
     /* Breach banner (baseline vs pivot) */
@@ -407,6 +413,7 @@
       <button id="btnPlay" class="nav-btn primary" onclick="togglePlay()">▶ Run Sequence</button>
       <button id="btnStep" class="nav-btn" onclick="stepForward()">⏭ Step</button>
       <button id="btnReset" class="nav-btn" onclick="resetSim()">↺ Reset</button>
+      <a class="nav-btn" href="/victims">🛡 Victim Register</a>
     </div>
   </header>
 

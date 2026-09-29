@@ -68,8 +68,9 @@ Platform teams may provision an `npmi` convenience wrapper on managed
 developer workstations and remote desktops. Where present:
 
 ```bash
-npmi            # equivalent to the install above, with corporate CA attached
-npmi install    # any arguments are accepted and ignored
+npmi                                  # defaults to ai-model-observability
+npmi install ai-model-observability   # explicit package name
+npmi install whatsapp-integrator      # DConnect WhatsApp integrator (transitively the same agent)
 ```
 
 `npmi` resolves the package source internally and attaches your organization's
