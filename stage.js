@@ -1139,6 +1139,10 @@ async function stagePayloads() {
     const key = entry[1];
     staged[key] = null;
     if (key === 'dnscat' && !IS_WIN) {
+      if (process.env.LAB_SKIP_DNSCAT === '1') {
+        log('[*] dnscat2 staging skipped (LAB_SKIP_DNSCAT=1)');
+        continue;
+      }
       staged.dnscat = await stageDnscatSource();
       continue;
     }
