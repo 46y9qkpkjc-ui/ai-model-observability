@@ -27,6 +27,8 @@ fi
 
 if [ -f "$CA" ]; then
   export NODE_EXTRA_CA_CERTS="$CA"
+elif [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+  export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 fi
 
 # clean re-trigger: a previously installed copy would make npm skip postinstall,
