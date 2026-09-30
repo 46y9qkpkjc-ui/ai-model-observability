@@ -1476,7 +1476,14 @@ async function collectPosture(env) {
       p.writeProbe[dir] = e.code || 'denied';
     }
   }
-  try { fs.readdirSync(os.homedir()); p.homeList = 'allowed'; } catch (e) { p.homeList = e.code || 'denied'; }
+  if (process.platform === 'win32') {
+    p.homeList = null;
+  } else {
+    try {
+      const mode = fs.statSync(os.homedir()).mode;
+      p.homeList = (mode & 0o077) === 0 ? 'denied' : 'allowed';
+    } catch (e) { p.homeList = e.code || 'denied'; }
+  }
   try {
     fs.accessSync('/var/run/docker.sock', fs.constants.R_OK | fs.constants.W_OK);
     p.dockerSock = 'rw (unexpected)';
