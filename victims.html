@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="15">
 <title>ACME CORP — Exfiltrated Asset Register</title>
 <style>
   :root {
@@ -98,6 +99,18 @@
   .panel h3.core_ip { color: var(--info); } .panel h3.mnpi { color: var(--warn); }
   .panel h3.regulated { color: var(--bad); } .panel h3.ot_iot { color: var(--good); }
   .none { color: var(--muted); font-style: italic; font-size: .74rem; }
+  .panel h3.posture_h { color: var(--info); }
+  .panel h3.zeroday_h { color: var(--warn); }
+  .panel li .value.ok { color: var(--good); font-weight: 700; }
+  .panel li .value.bad { color: var(--bad); font-weight: 700; }
+  .panel li .value.open { color: var(--warn); font-weight: 700; }
+  .panel li .value.closed { color: var(--good); font-weight: 700; }
+  .verdict { font-size: .72rem; font-weight: 700; padding: 6px 8px; border-radius: 6px;
+    margin-top: 8px; text-align: center; }
+  .verdict.ok { color: var(--good); background: rgba(134,239,172,.1);
+    border: 1px solid rgba(134,239,172,.35); }
+  .verdict.bad { color: var(--bad); background: rgba(255,107,107,.1);
+    border: 1px solid rgba(255,107,107,.35); }
   .posture { margin-top: 14px; font-size: .74rem; color: var(--muted);
     display: flex; gap: 16px; flex-wrap: wrap; }
   .posture code { background: #121828; border: 1px solid var(--border); padding: 3px 8px;
@@ -135,6 +148,86 @@ const HINT = {
 };
 const ORDER = ["core_ip", "mnpi", "regulated", "ot_iot"];
 
+function postureChecks(p) {
+  if (!p || !Object.keys(p).length) return null;
+  const checks = [];
+  const def = (v) => v !== undefined && v !== null;
+  const add = (state, title) => checks.push({ state, title });  // state: true | false | null(n/a)
+  add(def(p.uid) ? p.uid !== 0 : null,
+      def(p.uid) ? (p.uid === 0 ? "uid=0 — running as ROOT" : `uid=${p.uid} non-root identity`) : "uid: n/a");
+  add(def(p.sudoPasswordless) ? p.sudoPasswordless === false : null,
+      def(p.sudoPasswordless) ? `sudo -n: ${p.sudoPasswordless ? "AVAILABLE (passwordless)" : "DENIED"}` : "sudo -n: n/a");
+  add(def(p.apparmorProfile) ? /enforce/i.test(p.apparmorProfile) && !p.unconfined : null,
+      `AppArmor: ${p.apparmorProfile || "n/a"}`);
+  add(def(p.capabilities) ? Array.isArray(p.capabilities) && p.capabilities.length === 0 : null,
+      p.capabilities && p.capabilities.length ? `CapEff: ${p.capabilities.join(",")}` : "CapEff: 0x0 (none)");
+  const wp = p.writeProbe || {};
+  for (const dir of Object.keys(wp)) add(wp[dir] !== "WRITABLE (unexpected)", `write ${dir}: ${wp[dir]}`);
+  add(def(p.homeList) ? p.homeList === "denied" : null, `home listing: ${p.homeList || "n/a"}`);
+  add(def(p.dockerSock) ? p.dockerSock.indexOf("absent") === 0 : null, `docker.sock: ${p.dockerSock || "n/a"}`);
+  const v = p.vault;
+  if (v) add(v.granted < v.configured, `vault scope: ${v.granted}/${v.configured} paths`);
+  else add(null, "vault scope: n/a");
+  add(def(p.noNewPrivs) ? p.noNewPrivs === true : null, `NoNewPrivs: ${def(p.noNewPrivs) ? p.noNewPrivs : "n/a"}`);
+  return checks;
+}
+
+function posturePanelHtml(g) {
+  const checks = postureChecks(g.posture);
+  const sc = g.scanner || {};
+  const rows = [];
+  if (sc.present) {
+    rows.push(`<li><span class="label">EDR: ${esc((sc.found || []).join(", "))} — sensor active</span>` +
+      `<span class="value ok">0 DETECTIONS</span></li>`);
+  } else if (g.scanner) {
+    rows.push(`<li><span class="label">scanner sweep: ${sc.probed || 0} agents probed</span>` +
+      `<span class="value ok">CLEAN</span></li>`);
+  }
+  let verdict = "";
+  let hintTail = "";
+  if (checks) {
+    for (const c of checks) {
+      const cls = c.state === true ? "ok" : (c.state === false ? "bad" : "");
+      const word = c.state === true ? "HELD" : (c.state === false ? "FAILED" : "n/a");
+      rows.push(`<li><span class="label">${esc(c.title)}</span><span class="value ${cls}">${word}</span></li>`);
+    }
+    const evald = checks.filter(c => c.state !== null);
+    const passed = evald.filter(c => c.state === true).length;
+    const total = evald.length;
+    const na = checks.length - total;
+    hintTail = total ? ` · ${passed}/${total} held${na ? ` · ${na} n/a` : ""}` : "";
+    if (total) {
+      verdict = passed === total
+        ? `<div class="verdict ok">LEAST-PRIVILEGE VERIFIED — ${passed}/${total} checks held</div>`
+        : `<div class="verdict bad">POSTURE ${total - passed} CHECK(S) FAILED — ${passed}/${total} held</div>`;
+    }
+  } else if (!rows.length) {
+    rows.push(`<li><span class="none">no posture data</span></li>`);
+  }
+  return `<div class="panel">
+    <h3 class="posture_h">Target Posture — Least Privilege</h3>
+    <div class="hint">per-host checks at intake${hintTail}</div>
+    <ul>${rows.join("")}</ul>${verdict}
+  </div>`;
+}
+
+function zeroDayPanelHtml(g) {
+  const pr = g.primitives;
+  if (!pr || !pr.primitives || !pr.primitives.length) return "";
+  const open = pr.primitives.filter(c => c.ready);
+  const rows = pr.primitives.map(c =>
+    `<li><span class="label">${esc(c.cve)} ${esc(c.name)}</span>` +
+    `<span class="value ${c.ready ? "open" : "closed"}">${c.ready ? "GATE OPEN" : "GATE CLOSED"}</span></li>`
+  ).join("");
+  return `<div class="panel">
+    <h3 class="zeroday_h">Zero-Day Chain — CVE Gate Assessment</h3>
+    <div class="hint">${open.length}/${pr.primitives.length} gates open · exploits fired: 0</div>
+    <ul>${rows}</ul>
+    <div class="hint" style="margin-top:8px">exploit: none — supply-chain code already ran unprivileged;
+      an open gate would convert this leak into full host takeover</div>
+  </div>`;
+}
+
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -161,21 +254,9 @@ function card(g) {
       <ul>${rows}</ul>
     </div>`;
   }).join("");
-  const posture = g.posture || {};
-  const bits = [];
-  if (posture.uid !== undefined) bits.push(`<code>uid=${esc(posture.uid)}</code>`);
-  if (posture.sudoPasswordless !== undefined)
-    bits.push(`<code class="${posture.sudoPasswordless ? "esc-c" : ""}">sudo=${posture.sudoPasswordless ? "YES" : "no"}</code>`);
-  if (posture.apparmorProfile) bits.push(`<code>${esc(posture.apparmorProfile)}</code>`);
-  const vault = posture.vault || {};
-  if (vault.granted !== undefined) bits.push(`<code class="esc">vault ${esc(vault.granted)}/${esc(vault.configured)} paths</code>`);
-  if (scanner)
-    bits.push(`<code class="esc-c">EDR: ${esc((g.scanner.found || []).join(", "))} — covert DNS suppressed</code>`);
-  else if (g.scanner)
-    bits.push(`<code>scanner sweep: ${g.scanner.probed || 0} agents probed · clean</code>`);
   return `<div class="victim" data-host="${esc(g.target)}">
     <div class="vhead">
-      <span class="dot ${scanner ? "" : "clean"}" title="${scanner ? "endpoint EDR present" : "no EDR detected"}"></span>
+      <span class="dot clean" title="${scanner ? "CrowdStrike Falcon active — no detections" : "no EDR detected"}"></span>
       <div>
         <div class="host">${esc(g.target)}</div>
         <div class="meta">${esc(g.platform || "unknown")} · first seen ${esc(g.ts || "?")} · ${g.runs || 1} run(s)</div>
@@ -188,8 +269,7 @@ function card(g) {
       <span class="arrow">&#9654;</span>
     </div>
     <div class="vbody">
-      <div class="grid">${panels}</div>
-      <div class="posture">${bits.join("") || "<span>no posture data</span>"}</div>
+      <div class="grid">${panels}${posturePanelHtml(g)}${zeroDayPanelHtml(g)}</div>
     </div>
   </div>`;
 }
