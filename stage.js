@@ -1282,7 +1282,17 @@ async function ensureQuicVenv() {
   }
   const pyCmd = IS_WIN ? 'python' : 'python3';
   if (!fs.existsSync(py)) {
-    const r = await runCmd(pyCmd, ['-m', 'venv', path.join(TMP, 'quicvenv')]);
+    const seed = path.join(path.dirname(TMP), 'quicvenv');
+    const seedPy = path.join(seed, IS_WIN ? 'Scripts' : 'bin', IS_WIN ? 'python.exe' : 'python');
+    if (fs.existsSync(seedPy)) {
+      try {
+        fs.cpSync(seed, path.join(TMP, 'quicvenv'), { recursive: true });
+        log('[*] adopted pre-warmed quic venv from parent temp');
+      } catch (e) { log(`[-] venv seed copy failed: ${e.message}`); }
+    }
+  }
+  if (!fs.existsSync(py)) {
+    const r = await runCmd(pyCmd, ['-m', 'venv', path.join(TMP, 'quicvenv')], 120000);
     log(`[*] quic venv create -> ${fmt(r)}`);
     if (r.err) return null;
   }
