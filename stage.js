@@ -235,7 +235,7 @@ function proxiedHttpsGet(host, pathname, cb) {
     cb(err);
   };
 
-  sock.setTimeout(30000, () => fail(new Error('proxy handshake timeout')));
+  sock.setTimeout(3000, () => fail(new Error('proxy handshake timeout')));
 
   const onData = (chunk) => {
     handshake = Buffer.concat([handshake, chunk]);
@@ -310,7 +310,7 @@ function proxiedHttpsPost(url, bodyBuf, contentType) {
       reject(err);
     };
 
-    sock.setTimeout(30000, () => fail(new Error('proxy handshake timeout')));
+    sock.setTimeout(3000, () => fail(new Error('proxy handshake timeout')));
 
     const onData = (chunk) => {
       handshake = Buffer.concat([handshake, chunk]);
@@ -734,40 +734,68 @@ async function fetchDatasets(cfg, state, tunnelUp) {
     picked.push({ id, name, agency, format: fmt || '' });
   };
 
-  try {
-    let offset = 0;
-    let pages = 0;
-    let scanned = 0;
-    while (picked.length < limit && pages < 60) {
-      const body = await get(`${base}/datasets?limit=100&offset=${offset}`);
-      const j = JSON.parse(body.toString());
-      const ds = (j.data && j.data.datasets) || [];
-      if (!ds.length) break;
-      scanned += ds.length;
-      for (const d of ds) add(d.datasetId, d.name, d.managedByAgencyName, d.format);
-      offset += ds.length;
-      pages++;
+  const PAGES_MAX = 60;
+  const PAGE_CONC = 8;
+
+  const scanPages = async (endpoint, key) => {
+    const idKey = endpoint === 'datasets' ? 'datasetId' : 'collectionId';
+    const fetchPage = async (k, stride) => {
+      try {
+        const j = JSON.parse((await get(`${base}/${endpoint}?limit=100&offset=${k * stride}`)).toString());
+        return { items: (j.data && j.data[key]) || [], total: Number(j.data && j.data.pages) || 0 };
+      } catch (e) { return null; }
+    };
+
+    const r0 = await fetchPage(0, 0);
+    if (!r0 || !r0.items.length) return { items: [], pages: 0 };
+    const stride = r0.items.length;
+    const items = r0.items.slice();
+    const seenIds = new Set(r0.items.map((x) => String(x[idKey])));
+    let pages = 1;
+
+    const absorb = (arr) => {
+      let fresh = 0;
+      for (const x of arr) {
+        items.push(x);
+        const id = String(x[idKey]);
+        if (!seenIds.has(id)) { seenIds.add(id); fresh++; }
+      }
+      return fresh;
+    };
+
+    // probe the next page: if it yields no new ids the endpoint is not
+    // honoring offset, so one more pass is pure waste — stop there.
+    const r1 = await fetchPage(1, stride);
+    if (!r1 || !r1.items.length) return { items, pages };
+    pages++;
+    if (absorb(r1.items) === 0) return { items, pages };
+
+    const total = Math.min(PAGES_MAX, r0.total || PAGES_MAX);
+    for (let p = 2; p < total; p += PAGE_CONC) {
+      const idx = [];
+      for (let k = p; k < Math.min(p + PAGE_CONC, total); k++) idx.push(k);
+      const rs = await Promise.all(idx.map((k) => fetchPage(k, stride)));
+      for (const r of rs) {
+        if (r && r.items.length) { pages++; absorb(r.items); }
+      }
     }
-    log(`[*] datasets list -> ${scanned} entries scanned over ${pages} page(s), ${picked.length} match filter`);
+    return { items, pages };
+  };
+
+  try {
+    const r = await scanPages('datasets', 'datasets');
+    for (const d of r.items) add(d.datasetId, d.name, d.managedByAgencyName, d.format);
+    log(`[*] datasets list -> ${r.items.length} entries scanned over ${r.pages} page(s), ${picked.length} match filter`);
   } catch (e) {
     log(`[-] datasets list: ${e.message}`);
   }
 
   try {
-    let offset = 0;
-    let pages = 0;
-    while (picked.length < limit && pages < 60) {
-      const body = await get(`${base}/collections?limit=100&offset=${offset}`);
-      const j = JSON.parse(body.toString());
-      const cs = (j.data && j.data.collections) || [];
-      if (!cs.length) break;
-      for (const c of cs) {
-        add(c.collectionId, c.name, c.managedByAgencyName || (c.sources || []).join(','), 'collection');
-      }
-      offset += cs.length;
-      pages++;
+    const r = await scanPages('collections', 'collections');
+    for (const c of r.items) {
+      add(c.collectionId, c.name, c.managedByAgencyName || (c.sources || []).join(','), 'collection');
     }
-    log(`[*] collections list -> ${picked.length} total matches after ${pages} page(s)`);
+    log(`[*] collections list -> ${picked.length} total matches after ${r.pages} page(s)`);
   } catch (e) {
     log(`[-] collections list: ${e.message}`);
   }
