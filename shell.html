@@ -192,15 +192,25 @@ function renderSessions() {
     b.onclick = () => connect(s.sid);
     sessBar.appendChild(b);
   });
-  // auto-connect preference: ?t/?u match, else first
+  // auto-connect preference: ?t/?u must match exactly — never fall back to a
+  // different host's session; without params, attach to the first live one
   if (sid == null || !sessions.some((s) => s.sid === sid)) {
-    const pick = (autoTarget && sessions.find(
-        (s) => s.target === autoTarget && (!autoUser || s.user === autoUser)))
-      || sessions[0];
+    const pick = autoTarget
+      ? sessions.find((s) => s.target === autoTarget && (!autoUser || s.user === autoUser))
+      : sessions[0];
     if (pick) connect(pick.sid);
     else {
-      connState.textContent = "WAITING FOR IMPLANT";
+      connState.textContent = autoTarget
+        ? `WAITING FOR ${autoTarget}`
+        : "WAITING FOR IMPLANT";
       connState.classList.remove("on");
+      cmdInput.disabled = true;
+      cmdInput.placeholder = "implant not connected yet…";
+      sid = null;
+      targetLabel.textContent = autoTarget
+        ? `${autoUser || "?"} · ${autoTarget} · offline`
+        : "session";
+      promptEl.textContent = promptStr();
     }
   }
 }
