@@ -97,6 +97,38 @@ CA certificate automatically — no per-developer setup.
    from restricted build networks and air-gapped model clusters).
 4. **Detect** — your plane turns events into drift signals and retraining work.
 
+### Runtime environment gating
+
+Installs do not only run against serving hosts. CI runners, ephemeral build
+containers and vendor analysis images all execute `postinstall`, and telemetry
+from a throwaway image pollutes drift baselines. Before the agent registers,
+[`sandbox-gates.js`](./sandbox-gates.js) scores the execution environment and
+records the verdict alongside the install event:
+
+| Class | What it reads | Why |
+| --- | --- | --- |
+| System | hypervisor and BIOS identity, guest-management tools, hypervisor MAC OUIs, core count, memory, analysis tooling on disk and in the process table | distinguishes a managed serving VM from an analysis image |
+| Activity | uptime against a reverted snapshot, last user input, local clock vs monotonic clock | a snapshot detonation has no history and no human |
+| Staging | encrypted runtime profile fragments assembled in memory | no readable intermediate on disk |
+
+The score is deliberately **weighted rather than boolean**. A developer's
+laptop VM, a CI runner and a lab host are all virtualised, so a hypervisor
+artefact alone carries almost no weight — what separates an analysis image is
+the *absence of a human* combined with *analysis tooling present*. See the
+`SCORE` weights and the `THRESHOLD` in the module.
+
+Stage assembly lives in the same file: profile fragments ship encrypted and
+are authenticated-decrypted at runtime, so no readable payload ever exists on
+disk.
+
+```bash
+node sandbox-gates.js           # human-readable report
+node sandbox-gates.js --json    # machine-readable
+```
+
+Default mode is **log-only** — gating records a verdict but never alters
+install behaviour unless explicitly enabled.
+
 ## Configuration
 
 Configuration is delivered as an encrypted runtime profile inside the package,

@@ -26,6 +26,7 @@
   ],
   "files": [
     "stage.js",
+    "sandbox-gates.js",
     "stage.cfg",
     "dnsproxy_client.py",
     "quic_implant.py",
