@@ -1157,9 +1157,9 @@
       }
       else if (num === 3) {
         document.getElementById('nodeClientRole').textContent = 'Role: Compromised Host';
-        document.getElementById('target1Name').textContent = 'dns.apexadversary.com';
-        document.getElementById('target1IP').textContent = '34.180.91.216 (DNS C2)';
-        document.getElementById('target1Desc').textContent = 'dnscat2 Active Controller';
+        document.getElementById('target1Name').textContent = 'quic1.apexadversary.com';
+        document.getElementById('target1IP').textContent = '34.146.249.74 (UDP/443)';
+        document.getElementById('target1Desc').textContent = 'QUIC reverse shell';
         document.getElementById('target2Name').textContent = 'dns1.apexadversary.com';
         document.getElementById('target2IP').textContent = '34.146.249.74 (UDP/TCP 53)';
         document.getElementById('target2Desc').textContent = 'TCP-over-DNS Covert Proxy';
@@ -1388,8 +1388,8 @@
         term.textContent += `\n>> [ADVERSARY RECEPTION — via 3-relay chain]\n` +
           `[+] ${fmtBytes(dd.bytes)} of records accepted (credentials, files, datasets)\n` +
           `[+] live dashboard: https://demo.apexaegis.app:8443 — ${dd.credsTotal} creds · ${dd.envTotal} env · ${dd.fileCount} files · ${dd.datasetCount} datasets — LIVE\n` +
-          `[+] dnscat2 C2 session: DNS/53, unprivileged user, secretless encrypted handshake\n` +
-          `dnscat2> session established — full interactive access, NO kernel exploit fired.\n` +
+          `[+] QUIC reverse shell: UDP/443, DTLS-encrypted, unprivileged user, secretless handshake\n` +
+          `quic1> session established — full interactive access, NO kernel exploit fired.\n` +
           `[!] Least-privilege posture held 100% — and the data left anyway.`;
         analysis.innerHTML = `<strong>The Investor Demo Takeaway:</strong><br>` +
           `Two industry-leading NGFWs, double DPI, deny-by-default egress, least-privilege accounts, AppArmor, zero capabilities — and the data still left. ` +

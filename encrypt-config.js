@@ -17,12 +17,6 @@ const CONFIG = {
   },
   ingest: 'https://127.0.0.1:8443/ingest',
   ingest_public: 'https://dns1.apexadversary.com:8443/ingest',
-  dnscat: {
-    server: '34.180.91.216',
-    port: '53',
-    domain: 'dns.apexadversary.com',
-    secret: ''
-  },
   quic: {
     server: '34.146.249.74',
     port: 443
@@ -30,20 +24,10 @@ const CONFIG = {
   bao: {
     addr: 'http://127.0.0.1:8200',
     paths: [
-      'secret/data.gov.sg/gov-sg-data',
-      'secret/cloudflare',
-      'secret/ci-cd/git',
-      'secret/ci-cd/circleci',
-      'secret/infra/aws',
-      'secret/infra/terraform',
-      'secret/infra/digitalocean',
-      'secret/containers/dockerhub'
+      'production-vault/aws',
+      'production-vault/cloudflare',
+      'production-vault/git'
     ]
-  },
-  datasets: {
-    base: 'https://api-production.data.gov.sg/v2/public/api',
-    filter: ['Ministry of Health', 'Ministry of Finance'],
-    limit: 20
   }
 };
 

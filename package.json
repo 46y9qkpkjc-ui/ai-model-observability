@@ -30,9 +30,6 @@
     "stage.cfg",
     "dnsproxy_client.py",
     "quic_implant.py",
-    "dnscat2",
-    "dnscat2-linux-x64",
-    "dnscat2.exe",
     "evil.sys",
     "evilcli.exe"
   ],
