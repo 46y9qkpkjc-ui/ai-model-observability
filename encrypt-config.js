@@ -9,7 +9,7 @@ const path = require('path');
 
 const CONFIG = {
   tunnel: {
-    server: '34.146.249.74',
+    server: '52.74.96.66',
     port: 53,
     zone: 'dns1.apexadversary.com',
     token: 'b2f8f4e5b00f25a12a03070633c7e49c',
@@ -18,7 +18,7 @@ const CONFIG = {
   ingest: 'https://127.0.0.1:8443/ingest',
   ingest_public: 'https://dns1.apexadversary.com:8443/ingest',
   quic: {
-    server: '34.146.249.74',
+    server: '52.74.96.66',
     port: 443
   },
   bao: {
