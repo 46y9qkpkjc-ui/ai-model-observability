@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """dnsproxy_server v2 - TCP-over-DNS proxy with ACK/NACK reliability + DGA/CDN camouflage.
 
-Query names:  [decoy...].<data>.<seq5>.<session16>.<zone>
-  decoys  = 0-2 random labels (ignored, morphology camouflage)
-  data    = b32( frame XOR keystream , hmac8 )   <=44 chars, hostname-like
+Query names:  [decoy...].<data1>...<dataN>.<seq5>.<session16>.<zone>
+  decoys  = 0-2 random labels (skipped: first char 0/1/8/9, outside base32)
+  data    = b32( frame XOR keystream , hmac8 ) split across <=44-char labels,
+            concatenated before decode -> ~90 upstream bytes per query
   seq     = base36 zero-padded (0..36^5-1), acked back to client
   session = 16 random alnum chars, key material
 
@@ -362,7 +363,10 @@ def process_query(req):
             return build_response(req, qname_raw, [])
 
         idx = len(labels) - zl
-        data_lab, seq_s, sess_id = labels[idx - 3], labels[idx - 2], labels[idx - 1]
+        seq_s, sess_id = labels[idx - 2], labels[idx - 1]
+        data_lab = "".join(l for l in labels[:idx - 2] if l and l[0] not in "0189")
+        if not data_lab:
+            return build_servfail(req)
         try:
             seq = seq_from_b36(seq_s)
         except ValueError:
@@ -501,6 +505,8 @@ def start_doh(port, cert, key_path):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class DoHHandler(BaseHTTPRequestHandler):
+        timeout = 20   # bound every read: an idle/TLS-probe client must not leak a thread
+
         def _send(self, code, body, ctype):
             if isinstance(body, str):
                 body = body.encode()
@@ -532,7 +538,8 @@ def start_doh(port, cert, key_path):
     httpd = ThreadingHTTPServer(("0.0.0.0", port), DoHHandler)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(cert, key_path)
-    httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+    httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True,
+                                     do_handshake_on_connect=False)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     print(f"[*] DoH endpoint https://0.0.0.0:{port}/dns-query (cert={cert})")
 
